@@ -20,17 +20,16 @@ def timeInterval(startdate,enddate):
     # temp_activity.to_csv('temp_activity.csv')
 
     # 特征抽取
-    activity_res = pd.DataFrame(temp_activity['day_times'].groupby([temp_activity['user_id'],temp_activity['action_type']]).count().unstack().fillna(0))
-    launch_res = temp_launch.groupby('user_id').count()
-    video_res = temp_video.groupby('user_id').count()
     activity_res = pd.DataFrame(temp_activity['day_times'].groupby(
         [temp_activity['user_id'], temp_activity['action_type']]).count().unstack().fillna(0))
     launch_res = temp_launch.groupby('user_id').count()
     video_res = temp_video.groupby('user_id').count()
 
-    # feature = temp_register.join(launch_res.join(activity_res)).join(video_res).fillna(0)
-    feature = pd.concat([temp_register,activity_res,launch_res,video_res],axis=1).fillna(0)
+    feature = temp_register.join(launch_res.join(activity_res)).join(video_res).fillna(0)
+    # feature = pd.merge([temp_register,activity_res,launch_res,video_res]).fillna(0)
 
+    # print(feature.tail())
+    # feature = np.unique(feature)
     # print(feature)
     return feature
 
@@ -139,12 +138,15 @@ result = []
 for i in range(len(predict)):
     if(predict[i] == 1):
         result.append(train_id.iloc[i])
-        # print(train_id.iloc[i]) # 输出搞好啦！
+        print(train_id.iloc[i]) # 输出搞好啦！
 
 print(get_score(result,test_id))
 
 result = pd.DataFrame(result)
-result.to_csv('result.csv')
+print(result)
+result.to_csv('result.csv',index=None)
+
+
 
 
 # print(test_id)
