@@ -26,4 +26,46 @@ action种类共6种，播放，关注，点赞，转发，举报，减少此类�
    2.6 我们最终的上传结果，就是用1-30日的数据输入模型以后，user_id对应的label。
 
 ** 20180605 ** 
+@糖糕补充了计算特征值的部分
 
+** 20180607 **
+修正了预处理部分的问题，准确率提高到0.72左右
+比较了xgboost和gbdt的性能，增加了模型筛选模块。
+eg显示如下：
+
+1-23日活跃用户有： 18223
+在这里使用了模型： XGBClassifier(base_score=0.5, booster='gbtree', colsample_bylevel=1,
+       colsample_bytree=1, gamma=0, learning_rate=0.1, max_delta_step=0,
+       max_depth=3, min_child_weight=1, missing=None, n_estimators=100,
+       n_jobs=1, nthread=None, objective='binary:logistic', random_state=0,
+       reg_alpha=0, reg_lambda=1, scale_pos_weight=1, seed=None,
+       silent=True, subsample=1)
+预测数据有： 17241
+真实数据有： 18223
+precision is: 0.7397482744620382 recall is: 0.699884761016298
+正阳例，预测出真正的活跃用户有： 12754 评分： 0.7192646063613805
+在这里使用了模型： GradientBoostingClassifier(criterion='friedman_mse', init=None,
+              learning_rate=0.1, loss='deviance', max_depth=3,
+              max_features=None, max_leaf_nodes=None,
+              min_impurity_decrease=0.0, min_impurity_split=None,
+              min_samples_leaf=1, min_samples_split=2,
+              min_weight_fraction_leaf=0.0, n_estimators=100,
+              presort='auto', random_state=None, subsample=1.0, verbose=0,
+              warm_start=False)
+预测数据有： 17391
+真实数据有： 18223
+precision is: 0.7397504456327986 recall is: 0.7059759644405422
+正阳例，预测出真正的活跃用户有： 12865 评分： 0.7224686920873814
+
+提出疑问：add_feature第13行的14是怎么来的？这里有报错： ('string index out of range', 'occurred at index 14')
+
+报错完整信息如下：
+ File "/Users/lixuefei/PycharmProjects/bigdata/addFeature.py", line 47, in AddFeature
+    min_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Min_action_type, axis=1)
+  File "/Users/lixuefei/anaconda/lib/python3.5/site-packages/pandas/core/frame.py", line 4877, in apply
+    ignore_failures=ignore_failures)
+  File "/Users/lixuefei/anaconda/lib/python3.5/site-packages/pandas/core/frame.py", line 4973, in _apply_standard
+    results[i] = func(v)
+  File "/Users/lixuefei/PycharmProjects/bigdata/addFeature.py", line 16, in Min_action_type
+    return str(x.idxmin())[14]
+IndexError: ('string index out of range', 'occurred at index 0')
