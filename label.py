@@ -1,9 +1,12 @@
+# -*- coding: UTF-8 -*-
 import pandas as pd
 import numpy as np
 from sklearn import preprocessing, model_selection
+import addFeature as af
 
 # file = pd.read_csv('pre20180601.csv',names = ['user_id','action1','action2','action3','action4','action5','action6','launch_times','create_times'])
 
+#path='./dataSet/'
 # 读取源数据
 launch = pd.DataFrame(pd.read_table('app_launch_log.txt',names = ['user_id','app_launch']))#,seq = '\t'
 register = pd.DataFrame(pd.read_table('user_register_log.txt',names = ['user_id','register_day','register_type','device type']))
@@ -17,14 +20,11 @@ def timeInterval(type,startdate,enddate):
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
     temp_video = video[(video['video_create'] >= startdate) & (video['video_create'] <= enddate)]
     temp_activity = activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
-    temp_activity.to_csv('temp_activity.csv')
 
+    temp_activity.to_csv('temp_activity.csv')
     # 特征抽取
     activity_res = pd.DataFrame(temp_activity.groupby(['user_id', 'action_type'])[['day_times']].count().unstack().fillna(0))
-    print(len(activity_res))
 
-
-    print(activity_res)
     activity_res.to_csv('activity_res.csv')
 
     launch_res = temp_launch.groupby('user_id').count()
@@ -33,11 +33,29 @@ def timeInterval(type,startdate,enddate):
     feature = temp_register.join(launch_res.join(activity_res)).join(video_res).fillna(0)
     # feature = pd.concat([temp_register,activity_res,launch_res,video_res])
     # print(feature)
-
     return feature
+
+
 
 #选择1-23日数据作为训练集
 train_feature = timeInterval('train',1,23)
+
+#train_feature=pd.DataFrame(train_feature[(train_feature[('day_times', 0L)]>0) |\
+#                             (train_feature[('day_times', 1L)]>0 )|\
+#                              (train_feature[('day_times', 2L)]>0 )| \
+#                             (train_feature[('day_times', 3L)] > 0)|\
+#                              (train_feature[('day_times', 4L)]>0 )|\
+#                              (train_feature[('day_times', 5L)]>0) ])
+
+#这里要引入addFeature模块，增加的特征是Max,Min,Max_type,Min_type,Median,Std,Skew,Kurt
+train_feature=af.AddFeature(train_feature)
+
+print train_feature.head()
+train_feature.to_csv('train_feature.csv')
+
+#train_feature['Max']=np.max(train_feature)
+
+#train_feature.to_csv('train_feature.csv')
 
 #抽取训练的用户id
 train_id = train_feature['user_id']
@@ -110,11 +128,13 @@ Y_train = train_label
 predict = gbdt.predict(train_feature)
 
 # 输出所有结果
-# result = []
+result = []
+
 for i in range(len(predict)):
     if(predict[i] == 1):
         print(train_feature.iloc[i, [0]]) # 输出还没有搞好。
-        # result.append()
+        #result.append()
+np.savetxt('./result/new.csv', result, delimiter=',')
 # print(result)
 #
 # validation = test_feature.iloc[:,[0]]
