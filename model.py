@@ -1,4 +1,3 @@
-# -*- coding: UTF-8 -*
 import pandas as pd
 import numpy as np
 import addFeature as af
@@ -29,7 +28,7 @@ def trainInterval(startdate,enddate):
     feature = feature.fillna(0)
     feature.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2',\
                             3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace = True)
-    feature.to_csv('feature.csv')
+    #feature.to_csv('feature.csv')
     return feature
 
 def testInterval(startdate,enddate):
@@ -43,9 +42,9 @@ def testInterval(startdate,enddate):
 #获取1-23日的用户特征数据
 train_feature = trainInterval(1,23)
 
-#这里要引入addFeature模块，增加的特征是Max,Min,Max_action_type,Min_action_type,Median,Std,Skew,Kurt
+#这里要引入addFeature模块，增加的特征是Max,Min,Max_action_type,Min_action_type,Mean,Median,Std,Skew,Kurt
 train_feature = af.AddFeature(train_feature)
-
+train_feature.to_csv('train_feature.csv')
 #提取id
 train_id = train_feature['user_id']
 #获取24-30日产生数据的用户id
@@ -62,7 +61,7 @@ for item in train_id:
         active+= 1
     else:
         train_label.append(0)
-print"1-23日活跃用户有：",active
+print("1-23日活跃用户有：",active)
 
 # 评分准则函数
 def get_score(pre,true):
@@ -71,41 +70,41 @@ def get_score(pre,true):
     print("真实数据有：",len(true))
     for index in range(len(pre)):
         if(pre[index] in true):# 说明预测对了
-            # print(pre[index])
+            #print(pre[index])
             count += 1
     precision = count / len(pre) # 计算公式
     recall = count / len(true) # 计算公式
-    print"precision is:",precision,"recall is:",recall
+    print("precision is:",precision,"recall is:",recall)
     f1_score = (2 * precision * recall) / (precision + recall)
-    print"正阳例，即我们预测结果中，真正的活跃用户有：",count,"评分：",f1_score
+    print("正阳例，即我们预测结果中，真正的活跃用户有：",count,"评分：",f1_score)
 
 from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
-
 # 我们先选择几种特征进行计算
-used_feature = [4,5,6,7,8,9,10,11]
+used_feature = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+#used_feature = [4,5,6,7,8,9,10]
 
 # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 train_set = train_feature.iloc[:,used_feature]
 
 # 建模，20180607测试（最下面的函数测试的）GBDT最优秀，准确率0.72左右，所以用gbdt提交
-gbdt = GradientBoostingClassifier()
-gbdt.fit(train_set,train_label)
+# gbdt = GradientBoostingClassifier()
+# gbdt.fit(train_set,train_label)
 
-# 提交,这里文件的名字都称为final
-final_feature = trainInterval(1,30)
-final_id = final_feature['user_id']
-final_set = final_feature.iloc[:,used_feature]
-
-result = []
-predict = gbdt.predict(final_set)
-print"最终预测了",len(predict),"条数据"
-for i in range(len(predict)):
-    if(predict[i] == 1):
-        result.append(final_id.iloc[i])
-print "其中，最终提交数据：",len(result),"条"
-result = pd.DataFrame(result)
-result.to_csv('result.csv',index=None)
+# #提交,这里文件的名字都称为final
+# final_feature = trainInterval(1,30)
+# final_id = final_feature['user_id']
+# final_set = final_feature.iloc[:,used_feature]
+#
+# result = []
+# predict = gbdt.predict(final_set)
+# print("最终预测了"),len(predict),("条数据")
+# for i in range(len(predict)):
+#     if(predict[i] == 1):
+#         result.append(final_id.iloc[i])
+# print ("其中，最终提交数据："),len(result),("条")
+# result = pd.DataFrame(result)
+# result.to_csv('result.csv',index=None)
 
 # 20180607，今天，最好的模型是GBDT
 # !!!注意，这部分是用来验证模型好坏的，最终提交的部分里，模型暂时写死
@@ -126,11 +125,11 @@ def modelUse(model_name,data_set,data_label,data_id):
     get_score(result,true_user)
 
 # 下面注释掉的语句在测试模型的时候用
-# model_Set = [XGBClassifier(),GradientBoostingClassifier()]
+model_Set = [XGBClassifier(),GradientBoostingClassifier()]
 #
-# for model in model_Set:
-#     print("在这里使用了模型：",model)
-#     modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
+for model in model_Set:
+     print("在这里使用了模型：",model)
+     modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
 
 
 
