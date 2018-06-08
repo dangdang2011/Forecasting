@@ -8,12 +8,14 @@ def Max_action_count(x):
     return x.max()
 def Min_action_count(x):
     return x.min()
+
 #返回action 的类型，取值从0到5
 def Max_action_type(x):
-    return str(x.idxmax())[14]
-#返回action的类型，取值从0到5
+    return float(x.idxmax()[-1])
+#返回action 的类型，取值从0到5
 def Min_action_type(x):
-    return str(x.idxmin())[14]
+    return float(x.idxmin()[-1])
+
 def Mean_action(x):
     return x.mean()
 def Median_action(x):
@@ -26,6 +28,12 @@ def Kurt_action(x):
     return x.kurt()
 
 def AddFeature(train_feature):
+    # train_feature=pd.DataFrame(train_feature[(train_feature['action_type_0']>0) |\
+    #                             (train_feature['action_type_1']>0 )|\
+    #                              (train_feature['action_type_2']>0 )| \
+    #                             (train_feature['action_type_3'] > 0)|\
+    #                              (train_feature['action_type_4']>0 )|\
+    #                              (train_feature['action_type_5']>0) ])
     # 选取出action0--actoin5,统计出max_action
     max_action_count = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Max_action_count, axis=1)
     # 将每个user的max_action加入到train_feature中
@@ -38,12 +46,12 @@ def AddFeature(train_feature):
     train_feature = pd.concat([train_feature, min_action_count], axis=1, join='inner')
     train_feature.rename(columns={0: 'min_action_count'}, inplace=True)
 
-    # 出现次数最多的action类型
+    # # 出现次数最多的action类型
     max_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Max_action_type, axis=1)
     train_feature = pd.concat([train_feature, max_action_type], axis=1, join='inner')
     train_feature.rename(columns={0: 'max_action_type'}, inplace=True)
 
-    # 出现次数少的action类型
+    # # 出现次数最少的action类型
     min_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Min_action_type, axis=1)
     train_feature = pd.concat([train_feature, min_action_type], axis=1, join='inner')
     train_feature.rename(columns={0: 'min_action_type'}, inplace=True)
@@ -73,4 +81,5 @@ def AddFeature(train_feature):
     train_feature = pd.concat([train_feature, kurt_action], axis=1, join='inner')
     train_feature.rename(columns={0: 'kurt_action'}, inplace=True)
 
+    print train_feature.head()
     return train_feature

@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*
 import pandas as pd
 import numpy as np
 import addFeature as af
@@ -26,6 +27,8 @@ def trainInterval(startdate,enddate):
     feature = pd.merge(feature,video_res,on = 'user_id',how='left')
     feature = pd.merge(temp_register,feature,on='user_id',how='left')
     feature = feature.fillna(0)
+    feature.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2',\
+                            3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace = True)
     feature.to_csv('feature.csv')
     return feature
 
@@ -33,7 +36,6 @@ def testInterval(startdate,enddate):
     temp_launch = launch[(launch['app_launch'] >= startdate) & (launch['app_launch'] <= enddate)]
     temp_video = video[(video['video_create'] >= startdate) & (video['video_create'] <= enddate)]
     temp_activity = activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
-
     feature = pd.concat([temp_launch, temp_video, temp_activity])
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
@@ -41,9 +43,8 @@ def testInterval(startdate,enddate):
 #获取1-23日的用户特征数据
 train_feature = trainInterval(1,23)
 
-# add feature 部分有报错
-#这里要引入addFeature模块，增加的特征是Max,Min,Max_type,Min_type,Median,Std,Skew,Kurt
-# train_feature = af.AddFeature(train_feature)
+#这里要引入addFeature模块，增加的特征是Max,Min,Max_action_type,Min_action_type,Median,Std,Skew,Kurt
+train_feature = af.AddFeature(train_feature)
 
 #提取id
 train_id = train_feature['user_id']
@@ -61,7 +62,7 @@ for item in train_id:
         active+= 1
     else:
         train_label.append(0)
-print("1-23日活跃用户有：",active)
+print"1-23日活跃用户有：",active
 
 # 评分准则函数
 def get_score(pre,true):
@@ -74,9 +75,9 @@ def get_score(pre,true):
             count += 1
     precision = count / len(pre) # 计算公式
     recall = count / len(true) # 计算公式
-    print("precision is:",precision,"recall is:",recall)
+    print"precision is:",precision,"recall is:",recall
     f1_score = (2 * precision * recall) / (precision + recall)
-    print("正阳例，即我们预测结果中，真正的活跃用户有：",count,"评分：",f1_score)
+    print"正阳例，即我们预测结果中，真正的活跃用户有：",count,"评分：",f1_score
 
 from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
@@ -98,11 +99,11 @@ final_set = final_feature.iloc[:,used_feature]
 
 result = []
 predict = gbdt.predict(final_set)
-print("最终预测了",len(predict),"条数据")
+print"最终预测了",len(predict),"条数据"
 for i in range(len(predict)):
     if(predict[i] == 1):
         result.append(final_id.iloc[i])
-print("其中，最终提交数据：",len(result),"条")
+print "其中，最终提交数据：",len(result),"条"
 result = pd.DataFrame(result)
 result.to_csv('result.csv',index=None)
 
