@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import addFeature as af
+import AddIntervalFeature as aif
 from sklearn import preprocessing, model_selection
 
 # 读取源数据
@@ -15,9 +16,10 @@ def trainInterval(startdate,enddate):
     temp_launch = launch[(launch['app_launch'] >= startdate) & (launch['app_launch'] <= enddate)]
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
     temp_video = video[(video['video_create'] >= startdate) & (video['video_create'] <= enddate)]
-    temp_activity = activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
+    temp_activity =activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
 
     activity_res = temp_activity.groupby(['user_id','action_type'])['day_times'].size().unstack().fillna(0).reset_index()
+
     # print(activity_res.names())
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
@@ -26,12 +28,20 @@ def trainInterval(startdate,enddate):
     feature = pd.merge(feature,video_res,on = 'user_id',how='left')
     feature = pd.merge(temp_register,feature,on='user_id',how='left')
     feature = feature.fillna(0)
+
     feature.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2',\
                             3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace = True)
     # 这里要引入addFeature模块，增加的特征是Max,Min,Max_action_type,Min_action_type,Mean,Median,Std,Skew,Kurt
     feature = af.AddFeature(feature)
-    #train_feature.to_csv('train_feature.csv')
-    #feature.to_csv('feature.csv')
+
+    # 这里除了原先的app_launch,还新增了5个特征，分别是  launch_interval_mean,
+    # launch_interval_max,launch_interval_min,
+    # launch_interval_var,launch_interval_cv
+    launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
+    launch_interval.to_csv('launch_interval.csv')
+
+    feature=pd.merge(feature,launch_interval,on='user_id',how='left')
+    feature.to_csv('feature.csv')
     return feature
 
 def testInterval(startdate,enddate):
@@ -81,8 +91,13 @@ def get_score(pre,true):
 from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
 # 我们先选择几种特征进行计算
-used_feature = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+used_feature = [4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25]
 #used_feature = [4,5,6,7,8,9,10]
+# used_feature=['app_launch','action_type_0','action_type_1','action_type_2',\
+#               'action_type_3','action_type_4','action_type_5','video_create',\
+#               'max_action_count','min_action_count','max_action_type',\
+#               'min_action_type','mean_action','median_action',\
+#               'std_action','skew_action','kurt_action']
 
 # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 train_set = train_feature.iloc[:,used_feature]
