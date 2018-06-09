@@ -28,6 +28,9 @@ def trainInterval(startdate,enddate):
     feature = feature.fillna(0)
     feature.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2',\
                             3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace = True)
+    # 这里要引入addFeature模块，增加的特征是Max,Min,Max_action_type,Min_action_type,Mean,Median,Std,Skew,Kurt
+    feature = af.AddFeature(feature)
+    #train_feature.to_csv('train_feature.csv')
     #feature.to_csv('feature.csv')
     return feature
 
@@ -42,9 +45,6 @@ def testInterval(startdate,enddate):
 #获取1-23日的用户特征数据
 train_feature = trainInterval(1,23)
 
-#这里要引入addFeature模块，增加的特征是Max,Min,Max_action_type,Min_action_type,Mean,Median,Std,Skew,Kurt
-train_feature = af.AddFeature(train_feature)
-train_feature.to_csv('train_feature.csv')
 #提取id
 train_id = train_feature['user_id']
 #获取24-30日产生数据的用户id
@@ -88,23 +88,23 @@ used_feature = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 train_set = train_feature.iloc[:,used_feature]
 
 # 建模，20180607测试（最下面的函数测试的）GBDT最优秀，准确率0.72左右，所以用gbdt提交
-# gbdt = GradientBoostingClassifier()
-# gbdt.fit(train_set,train_label)
+gbdt = GradientBoostingClassifier()
+gbdt.fit(train_set,train_label)
 
-# #提交,这里文件的名字都称为final
-# final_feature = trainInterval(1,30)
-# final_id = final_feature['user_id']
-# final_set = final_feature.iloc[:,used_feature]
-#
-# result = []
-# predict = gbdt.predict(final_set)
-# print("最终预测了"),len(predict),("条数据")
-# for i in range(len(predict)):
-#     if(predict[i] == 1):
-#         result.append(final_id.iloc[i])
-# print ("其中，最终提交数据："),len(result),("条")
-# result = pd.DataFrame(result)
-# result.to_csv('result.csv',index=None)
+#提交,这里文件的名字都称为final
+final_feature = trainInterval(1,30)
+final_id = final_feature['user_id']
+final_set = final_feature.iloc[:,used_feature]
+
+result = []
+predict = gbdt.predict(final_set)
+print("最终预测了",len(predict),"条数据")
+for i in range(len(predict)):
+    if(predict[i] == 1):
+        result.append(final_id.iloc[i])
+print ("其中，最终提交数据：",len(result),"条")
+result = pd.DataFrame(result)
+result.to_csv('result.csv',index=None)
 
 # 20180607，今天，最好的模型是GBDT
 # !!!注意，这部分是用来验证模型好坏的，最终提交的部分里，模型暂时写死
