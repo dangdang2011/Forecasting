@@ -53,12 +53,12 @@ def testInterval(startdate,enddate):
     return user_id
 
 #获取1-23日的用户特征数据
-train_feature = trainInterval(1,23)
+train_feature = trainInterval(1,19)
 
 #提取id
 train_id = train_feature['user_id']
 #获取24-30日产生数据的用户id
-test_id = testInterval(24,30)
+test_id = testInterval(20,30)
 
 # 打标签，如果1-23日注册的用户在24-30日出现过活动，则视为活跃用户
 active = 0
@@ -71,7 +71,7 @@ for item in train_id:
         active+= 1
     else:
         train_label.append(0)
-print("1-23日活跃用户有：",active)
+print("1-19日活跃用户有：",active)
 
 # 评分准则函数
 def get_score(pre,true):
@@ -102,17 +102,27 @@ used_feature = [4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25]
 # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 train_set = train_feature.iloc[:,used_feature]
 
-# 建模，20180607测试（最下面的函数测试的）GBDT最优秀，准确率0.72左右，所以用gbdt提交
-gbdt = GradientBoostingClassifier()
-gbdt.fit(train_set,train_label)
-
-#提交,这里文件的名字都称为final
+# # 建模，20180607测试（最下面的函数测试的）GBDT最优秀，准确率0.72左右，所以用gbdt提交
+# gbdt = GradientBoostingClassifier()
+# gbdt.fit(train_set,train_label)
+#
+# #提交,这里文件的名字都称为final
+# final_feature = trainInterval(1,30)
+# final_id = final_feature['user_id']
+# final_set = final_feature.iloc[:,used_feature]
+#
+# result = []
+# predict = gbdt.predict(final_set)
+#这里使用了xgboost
+xg=XGBClassifier()
+xg.fit(train_set,train_label)
 final_feature = trainInterval(1,30)
 final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
 
 result = []
-predict = gbdt.predict(final_set)
+predict = xg.predict(final_set)
+
 print("最终预测了",len(predict),"条数据")
 for i in range(len(predict)):
     if(predict[i] == 1):
