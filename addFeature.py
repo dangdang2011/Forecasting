@@ -46,15 +46,15 @@ def AddFeature(train_feature):
     train_feature = pd.concat([train_feature, min_action_count], axis=1, join='inner')
     train_feature.rename(columns={0: 'min_action_count'}, inplace=True)
 
-    # # 出现次数最多的action类型
-    max_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Max_action_type, axis=1)
-    train_feature = pd.concat([train_feature, max_action_type], axis=1, join='inner')
-    train_feature.rename(columns={0: 'max_action_type'}, inplace=True)
-
-    # # 出现次数最少的action类型
-    min_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Min_action_type, axis=1)
-    train_feature = pd.concat([train_feature, min_action_type], axis=1, join='inner')
-    train_feature.rename(columns={0: 'min_action_type'}, inplace=True)
+    # # # 出现次数最多的action类型
+    # max_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Max_action_type, axis=1)
+    # train_feature = pd.concat([train_feature, max_action_type], axis=1, join='inner')
+    # train_feature.rename(columns={0: 'max_action_type'}, inplace=True)
+    #
+    # # # 出现次数最少的action类型
+    # min_action_type = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Min_action_type, axis=1)
+    # train_feature = pd.concat([train_feature, min_action_type], axis=1, join='inner')
+    # train_feature.rename(columns={0: 'min_action_type'}, inplace=True)
 
     # action的均值
     mean_action = pd.DataFrame(train_feature.iloc[:, [5, 6, 7, 8, 9, 10]]).apply(Mean_action, axis=1)
@@ -81,5 +81,5 @@ def AddFeature(train_feature):
     train_feature = pd.concat([train_feature, kurt_action], axis=1, join='inner')
     train_feature.rename(columns={0: 'kurt_action'}, inplace=True)
 
-    print train_feature.head()
+    # print train_feature.head()
     return train_feature
