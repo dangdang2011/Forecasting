@@ -1,7 +1,5 @@
 import pandas as pd
 import numpy as np
-import addFeature as af
-from sklearn import preprocessing, model_selection
 
 #这个函数根据app启动的日期，算出间隔序列，存在interval_list里,对于只启动一次的用户，置为0
 def Interval_list(arr):
@@ -45,12 +43,12 @@ def Interval_CV(ser):
 
 #temp_launch = pd.read_table('app_launch_log.txt',names = ['user_id','app_launch'])#,seq = '\t')
 # 时间分片以及对应的特征抽取
-def Add_launch_Interval_Feature(temp_launch):
 
+# 用户登录的时间间隔的特征
+def Add_launch_Interval_Feature(temp_launch):
     #按user_id统计app启动次数
     #launch_res = temp_launch.groupby('user_id').count().reset_index()
     #print(launch_res.head())
-
     #统计app启动间隔的平均值
     launch_interval_mean=temp_launch.groupby('user_id').agg(Interval_Mean).reset_index().fillna(0)
     launch_interval_mean.rename(columns={'app_launch': 'launch_interval_mean'}, inplace=True)
@@ -82,5 +80,12 @@ def Add_launch_Interval_Feature(temp_launch):
     launch_res=launch_res.drop_duplicates()
     return launch_res
 
+#该函数用于添加用户创建视频的平均天数
+def Add_create_Interval_Feature(temp_video):
+    create_interval_mean = temp_video.groupby('user_id').agg(Interval_Mean).reset_index().fillna(0)
+    create_interval_mean.rename(columns={'video_create': 'create_interval_mean'}, inplace=True)
+    #create_interval_mean.drop_duplicates()
+    #print(create_interval_mean[create_interval_mean['user_id']==107685])
+    return create_interval_mean
 
-#train_feature = Add_launch_Interval_Feature(temp_launch)
+

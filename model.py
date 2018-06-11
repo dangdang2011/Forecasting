@@ -4,6 +4,7 @@ import addFeature as af
 from sklearn import preprocessing, model_selection
 from sklearn.decomposition import PCA
 import AddIntervalFeature as aif
+import AddContinuousFeature as acf
 from sklearn.model_selection import GridSearchCV
 
 
@@ -22,7 +23,13 @@ def trainInterval(startdate,enddate):
     temp_activity = activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
 
     activity_res = temp_activity.groupby(['user_id','action_type'])['day_times'].size().unstack().fillna(0).reset_index()
+    #这里就是给列改名了
+    activity_res.rename(columns={0: 'action_type_0',1: 'action_type_1',2: 'action_type_2',\
+                                 3: 'action_type_3',4: 'action_type_4',5: 'action_type_5'  }, inplace=True)
+    #print(activity_res.head())
     activity_page = temp_activity.groupby(['user_id','page'])['day_times'].size().unstack().fillna(0).reset_index()
+    activity_page.rename(columns={0: 'action_page_0',1: 'action_page_1',2: 'action_page_2',\
+                                 3: 'action_page_3',4: 'action_page_4'}, inplace=True)
     # print(activity_res.names())
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
@@ -33,17 +40,31 @@ def trainInterval(startdate,enddate):
     feature = pd.merge(temp_register,feature,on='user_id',how='left')
     feature = feature.fillna(0)
 
-    feature = af.AddFeature(feature)
-    launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
-    launch_interval.to_csv('launch_interval.csv')
-    feature = pd.merge(feature, launch_interval, on='user_id', how='left')
+    #print("Feature",feature.info())
 
-    # 创建一个PCA对象，并且将n_components的参数值设置为3。
+    feature = af.AddFeature(feature)
+
+    launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
+    #这里增加了平均创作视频间隔
+    create_interval=aif.Add_create_Interval_Feature(temp_video)
+    #这里增加了连续登陆的最大天数
+    launch_continuous=acf.Add_continuous_launch_Feature(temp_launch)
+
+    feature=pd.merge(feature,create_interval,on='user_id',how='left').fillna(0)
+    feature = pd.merge(feature, launch_interval, on='user_id', how='left')
+    feature=pd.merge(feature,launch_continuous,on='user_id',how='left')
+
+    feature = feature.fillna(0)
+    #print("Feature",feature.info())
+    #  创建一个PCA对象，并且将n_components的参数值设置为3。
     # 这里如果n_components的参数值为空将保留所有的特征。如果设置成‘mle’,那么会自动确定保留的特征数
     # copy:类型：bool，True或者False，缺省时默认为True。
     ## 意义：表示是否在运行算法时，将原始训练数据复制一份。若为True，则运行PCA算法后，原始训练数据的值不会有任何改变，
     # whiten:类型：bool，缺省时默认为False意义：白化。
-    used_feature = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]
+    #used_feature = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]
+    used_feature = []
+    for i in range(4,31):
+        used_feature.append(i)
     used_set = feature.iloc[:,used_feature]
     pca = PCA(n_components=4, copy=True, whiten=False)
     # 使用PCA对标准化后的特征进行降维
@@ -54,12 +75,11 @@ def trainInterval(startdate,enddate):
     print('单个变量方差贡献率', pca.explained_variance_ratio_)
     PCA_feature = pd.DataFrame(used_set_pca)
     PCA_feature['user_id'] = feature['user_id']
-
     feature = pd.merge(feature, PCA_feature)
-
-    # feature.to_csv('feature.csv')
-    print("Feature",feature.info())
-
+    #feature.to_csv('feature.csv')
+    #print(feature[feature['user_id']==14808][['user_id','launch_continuous_count']])
+    #print(temp_video[temp_video['user_id']==107685])
+    #print("Feature",feature.info())
     return feature
 
 def testInterval(startdate,enddate):
@@ -72,16 +92,16 @@ def testInterval(startdate,enddate):
     return user_id
 
 #获取1-23日的用户特征数据
-train_feature = trainInterval(15,21)
+train_feature = trainInterval(1,23)
 
 # add feature 部分有报错
 #这里要引入addFeature模块，增加的特征是Max,Min,Max_type,Min_type,Median,Std,Skew,Kurt
-train_feature = af.AddFeature(train_feature)
+#train_feature = af.AddFeature(train_feature)
 
 #提取id
 train_id = train_feature['user_id']
 #获取24-30日产生数据的用户id
-test_id = testInterval(22,30)
+test_id = testInterval(24,30)
 
 # 打标签，如果1-23日注册的用户在24-30日出现过活动，则视为活跃用户
 active = 0
@@ -114,43 +134,47 @@ from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
 
 # 我们先选择几种特征进行计算
-used_feature = [4,5,6,7,8,9,10,11]
+#used_feature = [4,5,6,7,8,9,10,11]
 
 # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
-train_set = train_feature.iloc[:,used_feature]
-used_feature = [4,5,6,7,8,9,10,11,12,13,14]
+#train_set = train_feature.iloc[:,used_feature]
+#used_feature = [4,5,6,7,8,9,10,11,12,13,14,15]
+used_feature=[]
+for i in range(4,35):
+    used_feature.append(i)
+
 train_set = train_feature.iloc[:,used_feature]
 # print(train_set)
 
 # !!!注意，这部分是用来验证模型好坏的，最终提交的部分里，模型暂时写死
-# 这个函数定义了拟合模型，可以选择不同的模型来拟合，用来快速测试
-# def modelUse(model_name,data_set,data_label,data_id):
-#     # 切分训练
-#     X_train, X_test, Y_train, Y_test = model_selection.train_test_split(data_set, train_label, test_size=0.1,
-#                                                                         random_state=1017)
-#     model = model_name
-#
-#     # 在这里我们选择model_Set中的一种model进行拟合,用data_set 和data_label来拟合
-#     model.fit(X_train, Y_train)
-#     # 基于上面的模型，我们给出预测结果
-#     predict = model.predict(data_set)
-#     # 输出所有结果
-#     result = []
-#     for i in range(len(predict)):
-#         if(predict[i] == 1):# 1 表示真正的活跃用户
-#             result.append(data_id.iloc[i])
-#             # print(train_id.iloc[i]) # 输出搞好啦！
-#     #给出模型评分
-#     # print("使用真实数据的结果")
-#     get_score(result,true_user)
-#
-#
-# # 下面注释掉的语句在测试模型的时候用
-# model_Set = [XGBClassifier(),GradientBoostingClassifier()]
+#这个函数定义了拟合模型，可以选择不同的模型来拟合，用来快速测试
+def modelUse(model_name,data_set,data_label,data_id):
+    # 切分训练
+    X_train, X_test, Y_train, Y_test = model_selection.train_test_split(data_set, train_label, test_size=0.1,
+                                                                        random_state=1017)
+    model = model_name
 
-# for model in model_Set:
-#     print("在这里使用了模型：",model)
-#     modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
+    # 在这里我们选择model_Set中的一种model进行拟合,用data_set 和data_label来拟合
+    model.fit(X_train, Y_train)
+    # 基于上面的模型，我们给出预测结果
+    predict = model.predict(data_set)
+    # 输出所有结果
+    result = []
+    for i in range(len(predict)):
+        if(predict[i] == 1):# 1 表示真正的活跃用户
+            result.append(data_id.iloc[i])
+            # print(train_id.iloc[i]) # 输出搞好啦！
+    #给出模型评分
+    # print("使用真实数据的结果")
+    get_score(result,true_user)
+
+
+# 下面注释掉的语句在测试模型的时候用
+model_Set = [XGBClassifier(),GradientBoostingClassifier()]
+
+for model in model_Set:
+    print("在这里使用了模型：",model)
+    modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
 
 ## 模型调参
 '''
