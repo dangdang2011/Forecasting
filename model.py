@@ -7,7 +7,6 @@ import AddIntervalFeature as aif
 import AddContinuousFeature as acf
 from sklearn.model_selection import GridSearchCV
 
-
 # 读取源数据
 launch = pd.read_table('app_launch_log.txt',names = ['user_id','app_launch'])#,seq = '\t')
 register = pd.read_table('user_register_log.txt',names = ['user_id','register_day','register_type','device type'])
@@ -17,9 +16,11 @@ activity = pd.read_table('user_activity_log.txt',names = ['user_id','day_times',
 
 # 时间分片以及对应的特征抽取
 def trainInterval(startdate,enddate):
-    temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
 
-    startdate = enddate - 7
+    #注册时间这里我需要和你讨论一下
+    #temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
+    #startdate = enddate - 7
+    temp_register=register
     temp_launch = launch[(launch['app_launch'] >= startdate) & (launch['app_launch'] <= enddate)]
     temp_video = video[(video['video_create'] >= startdate) & (video['video_create'] <= enddate)]
     temp_activity = activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
@@ -35,23 +36,22 @@ def trainInterval(startdate,enddate):
     # print(activity_res.names())
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
-
     feature = pd.merge(launch_res,activity_res,on = 'user_id',how = 'left')
+
     feature = pd.merge(feature,activity_page,on='user_id',how='left')
     feature = pd.merge(feature,video_res,on = 'user_id',how='left')
     feature = pd.merge(temp_register,feature,on='user_id',how='left')
+    #print(temp_register[temp_register['user_id']==3197])
     feature = feature.fillna(0)
-
+   # print(feature[feature['user_id'] == 3197][['user_id', 'app_launch']])
     #print("Feature",feature.info())
 
     feature = af.AddFeature(feature)
-
     launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
     #这里增加了平均创作视频间隔
     # create_interval=aif.Add_create_Interval_Feature(temp_video)
     #这里增加了连续登陆的最大天数
     launch_continuous=acf.Add_continuous_launch_Feature(temp_launch)
-
     # feature=pd.merge(feature,create_interval,on='user_id',how='left').fillna(0)
     feature = pd.merge(feature, launch_interval, on='user_id', how='left')
     feature=pd.merge(feature,launch_continuous,on='user_id',how='left')
@@ -64,8 +64,9 @@ def trainInterval(startdate,enddate):
     ## 意义：表示是否在运行算法时，将原始训练数据复制一份。若为True，则运行PCA算法后，原始训练数据的值不会有任何改变，
     # whiten:类型：bool，缺省时默认为False意义：白化。
     #used_feature = [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]
+
     used_feature = []
-    for i in range(4,feature.columns.size-1):# df.columns.size表示列数
+    for i in range(4,feature.columns.size):# df.columns.size表示列数
         used_feature.append(i)
     print(used_feature)
     used_set = feature.iloc[:,used_feature]
@@ -82,10 +83,9 @@ def trainInterval(startdate,enddate):
     PCA_feature['user_id'] = feature['user_id']
     feature = pd.merge(feature, PCA_feature)
 
-
-    print(feature.describe()) # 计算feature的统计值。
+    #print(feature[feature['user_id'] == 3197][['user_id', 'app_launch']])
+    #print(feature.describe()) # 计算feature的统计值。
     #feature.to_csv('feature.csv')
-    #print(feature[feature['user_id']==14808][['user_id','launch_continuous_count']])
     #print(temp_video[temp_video['user_id']==107685])
     #print("Feature",feature.info())
     return feature
@@ -99,12 +99,23 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-#获取1-23日的用户特征数据
-train_feature = trainInterval(1,23)
+#获取1-10、1-17、18-23日的用户特征数据
+#train_feature=trainInterval(1,23)
+train_feature_1 = trainInterval(1,10)
+train_feature_2 = trainInterval(11,17)
+train_feature_3 = trainInterval(18,23)
 
-# add feature 部分有报错
-#这里要引入addFeature模块，增加的特征是Max,Min,Max_type,Min_type,Median,Std,Skew,Kurt
-#train_feature = af.AddFeature(train_feature)
+#取所有用到的特征，乘上系数
+used_columns = train_feature_1.columns.values.tolist()
+used_columns=used_columns[4:len(used_columns)]
+for used_column in used_columns:
+    train_feature_1[used_column]=train_feature_1[used_column].map(lambda x: x*0.1)
+    train_feature_2[used_column]=train_feature_2[used_column].map(lambda x: x*0.3)
+    train_feature_3[used_column]=train_feature_3[used_column].map(lambda x: x*0.6)
+
+#将三组特征先连接，然后按user_id、register_day、register_type、device_type做groupy，然后求和
+train_feature=pd.concat([train_feature_1,train_feature_2,train_feature_3],ignore_index=True)
+train_feature=train_feature.groupby(['user_id','register_day','register_type','device type']).agg(sum).reset_index()
 
 #提取id
 train_id = train_feature['user_id']
@@ -148,40 +159,40 @@ from xgboost import XGBClassifier
 #train_set = train_feature.iloc[:,used_feature]
 #used_feature = [4,5,6,7,8,9,10,11,12,13,14,15]
 used_feature=[]
-for i in range(4, train_feature.columns.size-1):
+for i in range(4, train_feature.columns.size):
     used_feature.append(i)
 
 train_set = train_feature.iloc[:,used_feature]
 # print(train_set)
 
 # !!!注意，这部分是用来验证模型好坏的，最终提交的部分里，模型暂时写死
-#这个函数定义了拟合模型，可以选择不同的模型来拟合，用来快速测试
-# def modelUse(model_name,data_set,data_label,data_id):
-#     # 切分训练
-#     X_train, X_test, Y_train, Y_test = model_selection.train_test_split(data_set, data_label, test_size=0.3, random_state=1)
-#     model = model_name
-#
-#     # 在这里我们选择model_Set中的一种model进行拟合,用data_set 和data_label来拟合
-#     model.fit(X_train, Y_train)
-#     # 基于上面的模型，我们给出预测结果
-#     predict = model.predict(data_set)
-#     # 输出所有结果
-#     result = []
-#     for i in range(len(predict)):
-#         if(predict[i] == 1):# 1 表示真正的活跃用户
-#             result.append(data_id.iloc[i])
-#             # print(train_id.iloc[i]) # 输出搞好啦！
-#     #给出模型评分
-#     # print("使用真实数据的结果")
-#     get_score(result,true_user)
-#
-#
-# # 下面注释掉的语句在测试模型的时候用
-# model_Set = [XGBClassifier(),GradientBoostingClassifier()]
-#
-# for model in model_Set:
-#     print("在这里使用了模型：",model)
-#     modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
+# #这个函数定义了拟合模型，可以选择不同的模型来拟合，用来快速测试
+def modelUse(model_name,data_set,data_label,data_id):
+    # 切分训练
+    X_train, X_test, Y_train, Y_test = model_selection.train_test_split(data_set, data_label, test_size=0.3, random_state=1)
+    model = model_name
+
+    # 在这里我们选择model_Set中的一种model进行拟合,用data_set 和data_label来拟合
+    model.fit(X_train, Y_train)
+    # 基于上面的模型，我们给出预测结果
+    predict = model.predict(data_set)
+    # 输出所有结果
+    result = []
+    for i in range(len(predict)):
+        if(predict[i] == 1):# 1 表示真正的活跃用户
+            result.append(data_id.iloc[i])
+            # print(train_id.iloc[i]) # 输出搞好啦！
+    #给出模型评分
+    # print("使用真实数据的结果")
+    get_score(result,true_user)
+
+
+# 下面注释掉的语句在测试模型的时候用
+model_Set = [XGBClassifier(),GradientBoostingClassifier()]
+
+for model in model_Set:
+    print("在这里使用了模型：",model)
+    modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
 
 ## 模型调参
 '''
@@ -208,8 +219,8 @@ modelPara(train_set,train_label)
 
 #####
 #
-# 建模，20180607测试（最下面的函数测试的）GBDT最优秀，准确率0.72左右，所以用gbdt提交
-gbdt = XGBClassifier()
+# 建模，201806013测试（最下面的函数测试的）GBDT最优秀，准确率0.8015左右，所以用gbdt提交
+gbdt = GradientBoostingClassifier()
 gbdt.fit(train_set,train_label)
 # 提交,这里文件的名字都称为final
 final_feature = trainInterval(1,30)
