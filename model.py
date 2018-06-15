@@ -8,6 +8,8 @@ import AddContinuousFeature as acf
 from sklearn.model_selection import GridSearchCV
 import seaborn as sns
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
 
 # 读取源数据
 launch = pd.read_table('app_launch_log.txt',names = ['user_id','app_launch'])#,seq = '\t')
@@ -69,9 +71,8 @@ def slice(opendate,closedate):# 去特征的区间划分
 
 # 时间分片以及对应的特征抽取
 def trainInterval(startdate, boundarydate, enddate):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
-    #注册时间这里我需要和你讨论一下
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
-    weight = [0,1] # 权值list
+    weight = [0.3,0.7] # 权值list
 
     #获取第一区间特征并加权
     first_feature = slice(startdate,boundarydate-1)
@@ -113,9 +114,11 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-train_feature = trainInterval(1, 16 ,23) #提train的特征
+train_feature = trainInterval(1, 17 ,23) #提train的特征
 train_id = train_feature['user_id'] #提取id
 test_id = testInterval(24,30) #获取24-30日产生数据的用户id
+
+#print("Feature",train_feature.info())
 
 # 打标签，如果1-23日注册的用户在24-30日出现过活动，则视为活跃用户
 active = 0
@@ -149,6 +152,7 @@ def get_score(pre,true):
 
 from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
 from sklearn import svm
 
 from sklearn.linear_model import LogisticRegression
@@ -163,7 +167,7 @@ def modelUse(model_name,data_set,data_label,data_id):
     X_train, X_test, Y_train, Y_test = model_selection.train_test_split(data_set, data_label, test_size=0.3, random_state=1)
     model = model_name
     # 在这里我们选择model_Set中的一种model进行拟合,用data_set 和data_label来拟合
-    print(X_train)
+    #print(X_train)
     model.fit(X_train, Y_train)
     # 基于上面的模型，我们给出预测结果
     predict = model.predict(data_set)
@@ -179,7 +183,7 @@ def modelUse(model_name,data_set,data_label,data_id):
 
 
 # 下面注释掉的语句在测试模型的时候用
-model_Set = [XGBClassifier(),GradientBoostingClassifier(),LogisticRegression()]
+model_Set = [XGBClassifier(),GradientBoostingClassifier(),LGBMClassifier()]
 
 for model in model_Set:
     print("在这里使用了模型：",model)
