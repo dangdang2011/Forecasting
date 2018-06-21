@@ -28,12 +28,12 @@ def Kurt_action(x):
     return x.kurt()
 
 def AddFeature(train_feature):
-    train_feature=pd.DataFrame(train_feature[(train_feature['action_type_0']>0) |\
-                                (train_feature['action_type_1']>0 )|\
-                                 (train_feature['action_type_2']>0 )| \
-                                (train_feature['action_type_3'] > 0)|\
-                                 (train_feature['action_type_4']>0 )|\
-                                 (train_feature['action_type_5']>0) ])
+    # train_feature=pd.DataFrame(train_feature[(train_feature['action_type_0']>0) |\
+    #                             (train_feature['action_type_1']>0 )|\
+    #                              (train_feature['action_type_2']>0 )| \
+    #                             (train_feature['action_type_3'] > 0)|\
+    #                              (train_feature['action_type_4']>0 )|\
+    #                              (train_feature['action_type_5']>0) ])
     # 选取出action0--actoin5,统计出max_action
     max_action_count = pd.DataFrame(train_feature[['action_type_0', 'action_type_1', 'action_type_2',\
                                                    'action_type_3', 'action_type_4', 'action_type_5']]\

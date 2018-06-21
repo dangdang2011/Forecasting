@@ -23,12 +23,14 @@ def slice(opendate,closedate):# 去特征的区间划分
     temp_launch = launch[(launch['app_launch'] >= opendate) & (launch['app_launch'] <= closedate)]
     temp_video = video[(video['video_create'] >= opendate) & (video['video_create'] <= closedate)]
     temp_activity = activity[(activity['day_times'] >= opendate) & (activity['day_times'] <= closedate)]
-
     # 按groupby取特征：action的数量和page，launch次数，video create次数
     activity_res = temp_activity.groupby(['user_id', 'action_type'])['day_times'].size().unstack().fillna(0).reset_index()
     activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
+    #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
+    if 4 not in activity_res.columns:
+        activity_res[4]=0.0
 
     # 这里就是给列改名了
     activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
@@ -36,15 +38,12 @@ def slice(opendate,closedate):# 去特征的区间划分
     # print(activity_res.head())
     activity_page.rename(columns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
                                   3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
-    # print(activity_res.names())
-
     feature = pd.merge(launch_res, activity_res, on='user_id', how='left')
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
 
     # print(feature[feature['user_id'] == 3197][['user_id', 'app_launch']])
     # print("Feature",feature.info())
-
     feature = af.AddFeature(feature)
 
     launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
@@ -72,10 +71,10 @@ def slice(opendate,closedate):# 去特征的区间划分
 # 时间分片以及对应的特征抽取
 def trainInterval(startdate, boundarydate, enddate):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
-    weight = [0.3,0.7] # 权值list
+    weight = [0,1] # 权值list
 
     #获取第一区间特征并加权
-    first_feature = slice(startdate,boundarydate-1)
+    first_feature = slice(startdate,boundarydate)
     # print(first_feature.head())
     used_feature = [i for i in range(1, first_feature.columns.size)]
     first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * weight[0]
@@ -86,7 +85,8 @@ def trainInterval(startdate, boundarydate, enddate):     # boundarydate用于划
     used_feature = [i for i in range(1, second_feature.columns.size)]
     second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * weight[1]
 
-    second_feature.add(first_feature)
+    #第一区间的特征不要，只取第二区间的特征
+    #second_feature.add(first_feature)
 
     # 构造特征集合
     feature = pd.merge(temp_register,second_feature, on='user_id', how='left').fillna(0)
@@ -114,9 +114,21 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-train_feature = trainInterval(1, 17 ,23) #提train的特征
-train_id = train_feature['user_id'] #提取id
-test_id = testInterval(24,30) #获取24-30日产生数据的用户id
+data_1=trainInterval(1,1,16)
+train_id_1=data_1['user_id']
+test_id_1=testInterval(17,23)
+
+data_2=trainInterval(1,8,23)
+train_id_2=data_2['user_id']
+test_id_2=testInterval(24,30)
+
+train_feature=data_1.append(data_2)
+train_id=train_id_1.append(train_id_2)
+test_id=np.append(test_id_1,test_id_2)
+
+# train_feature = trainInterval(1,1,23) #提train的特征
+# train_id = train_feature['user_id'] #提取id
+# test_id = testInterval(24,30) #获取24-30日产生数据的用户id
 
 #print("Feature",train_feature.info())
 
@@ -154,7 +166,6 @@ from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn import svm
-
 from sklearn.linear_model import LogisticRegression
 
 used_feature=[i for i in range(4, train_feature.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
@@ -190,7 +201,6 @@ for model in model_Set:
     modelUse(model_name=model,data_set=train_set,data_id=train_id,data_label=train_label)
 
 ## 模型调参
-
 # def modelPara(data_train,data_label):
 #     param_xg_test = {
 #         # 'max_depth':[7,8,9,10],
@@ -227,20 +237,20 @@ for model in model_Set:
 #####
 #
 # 建模，201806013测试（最下面的函数测试的）GBDT最优秀，准确率0.8015左右，所以用gbdt提交
-# gbdt = GradientBoostingClassifier()
-# gbdt.fit(train_set,train_label)
-# # 提交,这里文件的名字都称为final
-# final_feature = trainInterval(1,30)
-# final_id = final_feature['user_id']
-# final_set = final_feature.iloc[:,used_feature]
-# result = []
-# predict = gbdt.predict(final_set)
-# print("最终预测了",len(predict),"条数据")
-# for i in range(len(predict)):
-#     if(predict[i] == 1):
-#         result.append(final_id.iloc[i])
-# print("其中，最终提交数据：",len(result),"条")
-# result = pd.DataFrame(result)
-# result.to_csv('result.csv',index=None)
+lgb = LGBMClassifier()
+lgb.fit(train_set,train_label)
+# 提交,这里文件的名字都称为final
+final_feature = trainInterval(1,15,30)
+final_id = final_feature['user_id']
+final_set = final_feature.iloc[:,used_feature]
+result = []
+predict = lgb.predict(final_set)
+print("最终预测了",len(predict),"条数据")
+for i in range(len(predict)):
+    if(predict[i] == 1):
+        result.append(final_id.iloc[i])
+print("其中，最终提交数据：",len(result),"条")
+result = pd.DataFrame(result)
+result.to_csv('result.csv',index=None)
 
 #####
