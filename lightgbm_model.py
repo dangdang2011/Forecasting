@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import addFeature as af
-from sklearn import preprocessing, model_selection
+from sklearn import preprocessing, model_selection,metrics
 from sklearn.decomposition import PCA
 import AddIntervalFeature as aif
 import AddContinuousFeature as acf
@@ -182,39 +182,69 @@ train_set_2 = data_2.iloc[:,used_feature]
 #装载lgbd的验证数据，data2和标签
 train_data=lgb.Dataset(train_set_1,label=train_label_1)
 lgb_eval =lgb.Dataset(train_set_2,label=train_label_2)
-# lightgbm初始参数
-param = {
-    'num_leaves':250,
+
+#调参
+# params={
+#     #以下参数提高准确率
+#     'learning_rate':[0.01,0.05,0.1,0.15,0.2,0.25,0.3],
+#     'max_depth':[3,4,5,6,7,8],
+#     'num_leaves':[31,50,70,90,110,127,150,170,200,220,250],
+#     #'num_iterations':[50,100,150,200,250,300,400,500],
+#     #'max_bin':[x for x in range(100,255,5)],
+#     # 'min_data_in_leaf':[x for x in range(20,200,5)],
+#     #'n_estimators':[x for x in range(10,500,10)]
+# }
+# lgbm=lgb.LGBMClassifier()
+# grid=GridSearchCV(lgbm,params,cv=5,scoring='f1')
+# #开始调参
+# print('开始调参')
+# grid.fit(train_set_2,train_label_2)
+# print('最佳分数',grid.best_score_)
+# print('最佳参数',grid.best_params_)
+# print('最佳模型',grid.best_estimator_)
+
+# # lightgbm初始参数
+param_test = {
+    'boosting_type':'gbdt',
+    'num_leaves':200,
     'objective':'binary',
     'max_depth':8,
-    'learning_rate':0.05,
-    'max_bin':200}
-param['metric'] = ['auc', 'binary_logloss']
-
+    'learning_rate':0.04
+    }
+#
 # lightgbm开始训练模型
-num_round = 50
-lgbm = lgb.train(param,train_data,num_round)
-#用data2测试，计算评分
-predict=lgbm.predict(train_set_2)
-result = []
-for i in range(len(predict)):
-    if (predict[i] >= 0.42):  # 阈值大于0.41表示真正的活跃用户
-        result.append(train_id_2.iloc[i])
-        # print(train_id.iloc[i]) # 输出搞好啦！
-# 给出模型评分
-# print("使用真实数据的结果")
-get_score(result, true_user_2)
+# lgbm=lgb.train(params=param_test,train_set=train_data)
+# #用data2测试，计算评分
+# predict=lgbm.predict(train_set_2)
+# result = []
+# for i in range(len(predict)):
+#     if (predict[i] >= 0.42):  # 阈值大于0.42表示真正的活跃用户
+#         result.append(train_id_2.iloc[i])
+#         # print(train_id.iloc[i]) # 输出搞好啦！
+# # 给出模型评分
+# # print("使用真实数据的结果")
+# get_score(result, true_user_2)
 
+#将data1和data2合并作为新的训练集，用上面确定的参数，训练出新模型
+
+final_trainset=train_set_1.append(train_set_2)
+print('data1+data2',len(train_set_1),len(train_set_2),len(final_trainset))
+final_train_label=train_label_1+train_label_2
+final_train_data=lgb.Dataset(final_trainset,final_train_label)
+print('开始训练模型')
+final_model=lgb.train(params=param_test,train_set=final_train_data)
+
+print('开始预测数据')
 #提交部分
 final_feature = trainInterval(1,15,30)
 final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
 result = []
-predict = lgbm.predict(final_set)
+predict = final_model.predict(final_set)
 print("最终预测了",len(predict),"条数据")
 for i in range(len(predict)):
-    if(predict[i] >= 0.42 ):
+    if(predict[i] >=0.42 ):
         result.append(final_id.iloc[i])
 print("其中，最终提交数据：",len(result),"条")
 result = pd.DataFrame(result)
-result.to_csv('result.csv',index=None)
+# result.to_csv('result.csv',index=None)
