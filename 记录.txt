@@ -1,3 +1,24 @@
+** 20180623 **
+max_depth=7,
+                           min_child_weight=1,
+                           learning_rate=0.1,
+                           n_estimators=500,
+                           silent=True,
+                           objective='binary:logistic',
+                           gamma=0,
+                           max_delta_step=0,
+                           subsample=1,
+                           colsample_bytree=1,
+                           colsample_bylevel=1,
+                           reg_alpha=0,
+                           reg_lambda=0,
+                           scale_pos_weight=1,
+                           seed=1,
+                           missing=None)
+
+0.7213867388681244
+* feature相加 add函数这里
+
 ** 20180613 **
  xgb = XGBClassifier(
         silent=0,  # 设置成1则没有运行信息输出，最好是设置为0.是否在运行升级时打印消息。
