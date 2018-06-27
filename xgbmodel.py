@@ -63,11 +63,17 @@ def slice(opendate,closedate):# 特征的区间划分
     activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
+    author_res = temp_activity.groupby(['author_id', 'action_type'])['day_times'].size().unstack().fillna(
+        0).reset_index()
+
+
     #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
     if 4 not in activity_res.columns:
         activity_res[4]=0.0
 
     # 改列名
+    author_res.rename(columns={0: 'au_action_type_0', 1: 'au_action_type_1', 2: 'au_action_type_2', \
+                               3: 'au_action_type_3', 4: 'au_action_type_4', 5: 'au_action_type_5'}, inplace=True)
     activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
                                  3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace=True)
     # print(activity_res.head())
@@ -76,6 +82,8 @@ def slice(opendate,closedate):# 特征的区间划分
     feature = pd.merge(launch_res, activity_res, on='user_id', how='left')
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
+    feature = pd.merge(feature, author_res, left_on='user_id', right_on='author_id', how='left').fillna(0)
+    del feature['author_id']
 
     feature = af.AddFeature(feature)
 
@@ -181,7 +189,12 @@ model = XGBClassifier(silent=0,  # 设置成1则没有运行信息输出，最�
 )
 
 # 训练集使用data1
-model.fit(data_set_1, label_1)
+#model.fit(data_set_1, label_1)
+
+#训练集使用data1+data2
+final_label=label_1+label_2
+final_trainset=data_set_1.append(data_set_2)
+model.fit(data_set_1,label_1)
 
 # 基于上面的模型，我们给出预测结果
 predict = model.predict(data_set_2)

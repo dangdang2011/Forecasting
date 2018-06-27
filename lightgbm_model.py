@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore')
 
 # 读取源数据
 launch = pd.read_table('app_launch_log.txt',names = ['user_id','app_launch'])#,seq = '\t')
-register = pd.read_table('user_register_log.txt',names = ['user_id','register_day','register_type','device type'])
+register = pd.read_table('user_register_log.txt',names = ['user_id','register_day','register_type','device_type'])
 video = pd.read_table('video_create_log.txt',names = ['user_id','video_create'])
 activity = pd.read_table('user_activity_log.txt',names = ['user_id','day_times','page','video_id','author_id'
     ,'action_type'])
@@ -31,11 +31,16 @@ def slice(opendate,closedate):# 去特征的区间划分
     activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
+    #这里统计数author_id被播放、关注、点赞、转发、举报和减少推荐的数量
+    author_res = temp_activity.groupby(['author_id', 'action_type'])['day_times'].size().unstack().fillna(0).reset_index()
+
     #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
     if 4 not in activity_res.columns:
         activity_res[4]=0.0
 
     # 这里就是给列改名了
+    author_res.rename(columns={0: 'au_action_type_0', 1: 'au_action_type_1', 2: 'au_action_type_2', \
+                               3: 'au_action_type_3', 4: 'au_action_type_4', 5: 'au_action_type_5'}, inplace=True)
     activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
                                  3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace=True)
     # print(activity_res.head())
@@ -45,6 +50,9 @@ def slice(opendate,closedate):# 去特征的区间划分
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
 
+    #将具有user_id==author_id的用户合并，如果author_id不在左边的表中，则忽略
+    feature = pd.merge(feature, author_res, left_on='user_id', right_on='author_id', how='left').fillna(0)
+    del feature['author_id']
     # print(feature[feature['user_id'] == 3197][['user_id', 'app_launch']])
     # print("Feature",feature.info())
     feature = af.AddFeature(feature)
@@ -117,13 +125,13 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-data_1=trainInterval(1,1,16)
+data_1=trainInterval(1,14,21)
 train_id_1=data_1['user_id']
-test_id_1=testInterval(17,23)
+test_id_1=testInterval(22,28)
 
-data_2=trainInterval(1,8,23)
+data_2=trainInterval(1,17,24)
 train_id_2=data_2['user_id']
-test_id_2=testInterval(24,30)
+test_id_2=testInterval(25,30)
 
 # train_feature = trainInterval(1,1,23) #提train的特征
 # train_id = train_feature['user_id'] #提取id
@@ -174,6 +182,7 @@ true_user_2 = []
 train_label_2,true_user_2=MakeLabel(train_id_2,test_id_2)
 
 #提取出data1的特征和data2的特征，放在train_set_data1和train_set_data2中
+print('feature',data_1.info())
 used_feature=[i for i in range(4, data_1.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 train_set_1 = data_1.iloc[:,used_feature]
 train_set_2 = data_2.iloc[:,used_feature]
@@ -208,31 +217,52 @@ param_test = {
     'boosting_type':'gbdt',
     'num_leaves':200,
     'objective':'binary',
-    'max_depth':8,
-    'learning_rate':0.04
+    'max_depth':5,
+    'learning_rate':0.1,
+    'n_estimators':100,
+    'feature_fraction': 0.9, # 建树的特征选择比例
+    'bagging_fraction': 0.8, # 建树的样本采样比例
+    'bagging_freq': 5,  # k 意味着每 k 次迭代执行bagging
+    'verbose': 1 # <0 显示致命的, =0 显示错误 (警告), >0 显示信息
     }
+
 #
 # lightgbm开始训练模型
 # lgbm=lgb.train(params=param_test,train_set=train_data)
 # #用data2测试，计算评分
-# predict=lgbm.predict(train_set_2)
-# result = []
-# for i in range(len(predict)):
-#     if (predict[i] >= 0.42):  # 阈值大于0.42表示真正的活跃用户
-#         result.append(train_id_2.iloc[i])
-#         # print(train_id.iloc[i]) # 输出搞好啦！
-# # 给出模型评分
-# # print("使用真实数据的结果")
-# get_score(result, true_user_2)
+# predict=lgbm.predict(train_set_2,num_iteration=lgbm.best_iteration)
+#试试二分类器的效果
+lgbm=lgb.LGBMClassifier(
+    boosting_type='gbdt',
+    num_leaves=31,
+    objective='binary',
+    max_depth=5,
+    learning_rate=0.01,
+    n_estimators=100,
+    feature_fraction= 0.9, # 建树的特征选择比例
+    bagging_fraction=0.8, # 建树的样本采样比例
+    bagging_freq= 5,  # k 意味着每 k 次迭代执行bagging
+    verbose= 1 # <0 显示致命的, =0 显示错误 (警告), >0 显示信息
+    )
+lgbm.fit(train_set_1,train_label_1)
+predict=lgbm.predict(train_set_2)
+result = []
+for i in range(len(predict)):
+    if (predict[i] == 1):  # 阈值大于0.42表示真正的活跃用户
+        result.append(train_id_2.iloc[i])
+        # print(train_id.iloc[i]) # 输出搞好啦！
+# 给出模型评分
+# print("使用真实数据的结果")
+get_score(result, true_user_2)
 
 #将data1和data2合并作为新的训练集，用上面确定的参数，训练出新模型
-
 final_trainset=train_set_1.append(train_set_2)
-print('data1+data2',len(train_set_1),len(train_set_2),len(final_trainset))
 final_train_label=train_label_1+train_label_2
 final_train_data=lgb.Dataset(final_trainset,final_train_label)
 print('开始训练模型')
-final_model=lgb.train(params=param_test,train_set=final_train_data)
+#final_model=lgb.train(params=param_test,train_set=final_train_data)
+final_model=lgbm.fit(final_trainset,final_train_label)
+
 
 print('开始预测数据')
 #提交部分
@@ -241,10 +271,10 @@ final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
 result = []
 predict = final_model.predict(final_set)
-print("最终预测了",len(predict),"条数据")
+print("最终预测 了",len(predict),"条数据")
 for i in range(len(predict)):
-    if(predict[i] >=0.42 ):
+    if(predict[i] ==1 ):
         result.append(final_id.iloc[i])
 print("其中，最终提交数据：",len(result),"条")
 result = pd.DataFrame(result)
-# result.to_csv('result.csv',index=None)
+result.to_csv('lgb_result.csv',index=None)
