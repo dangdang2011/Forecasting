@@ -117,7 +117,7 @@ def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用
     # print(first_feature.head())
 
     #获取第二区间特征并加权 如果有first则boubdarydate 必须+1 否则会重复计算boundarydate这一天的数据
-    second_feature = slice(boundarydate,enddate)
+    second_feature = slice(boundarydate+1,enddate)
     used_feature = [i for i in range(1, second_feature.columns.size)]
     second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * w2
     # print(second_feature.head())
@@ -139,17 +139,17 @@ def testInterval(startdate,enddate):
     return user_id
 
 
-data_1=trainInterval(1,7,14,w1=0,w2=1)
+data_1=trainInterval(1,8,15,w1=0.5,w2=0.5)
 train_id_1=data_1['user_id']
-test_id_1=testInterval(15,22)
+test_id_1=testInterval(16,23)
 # 抽取用户标签和真实活跃用户的标签
 label_1, true_user_1 = label(train_id_1,test_id_1)
 used_feature=[i for i in range(4, data_1.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 data_set_1 = data_1.iloc[:,used_feature] #
 
-data_2=trainInterval(1,17,24,w1 = 0,w2 = 1)
+data_2=trainInterval(8,15,22,w1 = 0.5,w2 = 0.5)
 train_id_2=data_2['user_id']
-test_id_2=testInterval(24,30)
+test_id_2=testInterval(23,30)
 label_2, true_user_2 = label(train_id_2,test_id_2)
 used_feature = [i for i in range(4, data_2.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 data_set_2 = data_2.iloc[:,used_feature] # 用data2验证模型的好坏，并重新（使用data1）调参。
@@ -198,7 +198,7 @@ for i in range(len(predict)):
 #给出模型评分
 get_score(result,true_user_2)
 
-data3 = trainInterval(1,14,21,0.3,0.7)
+# data3 = trainInterval(1,14,21,0.3,0.7)
 
 # 最后一次训练模型，用上面的参数
 train_feature = data_1.append(data_2)
