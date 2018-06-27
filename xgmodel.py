@@ -67,17 +67,11 @@ def slice(opendate,closedate):# 特征的区间划分
     activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
-    author_res = temp_activity.groupby(['author_id', 'action_type'])['day_times'].size().unstack().fillna(
-        0).reset_index()
-
-
     #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
     if 4 not in activity_res.columns:
         activity_res[4]=0.0
 
     # 改列名
-    author_res.rename(columns={0: 'au_action_type_0', 1: 'au_action_type_1', 2: 'au_action_type_2', \
-                               3: 'au_action_type_3', 4: 'au_action_type_4', 5: 'au_action_type_5'}, inplace=True)
     activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
                                  3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace=True)
     # print(activity_res.head())
@@ -86,8 +80,6 @@ def slice(opendate,closedate):# 特征的区间划分
     feature = pd.merge(launch_res, activity_res, on='user_id', how='left')
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
-    feature = pd.merge(feature, author_res, left_on='user_id', right_on='author_id', how='left').fillna(0)
-    del feature['author_id']
 
     feature = af.AddFeature(feature)
 
@@ -134,14 +126,7 @@ def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用
     # print(second_feature.head())
     # 构造特征集合
     feature = pd.merge(temp_register,second_feature, on='user_id', how='left').fillna(0)
-    # sns.heatmap(feature.corr(), annot=True, annot_kws={'size':8}, cmap="RdYlGn", xticklabels=True, yticklabels=True,linewidths=0)
-    # ax = plt.gca()
-    # for label in ax.xaxis.get_ticklabels():
-    #     label.set_rotation(45)
-    # for label in ax.yaxis.get_ticklabels():
-    #     label.set_rotation(0)
-    # ax.invert_yaxis()
-    # plt.show()
+
     return feature
 
 def testInterval(startdate,enddate):
@@ -154,17 +139,17 @@ def testInterval(startdate,enddate):
     return user_id
 
 
-data_1=trainInterval(1,8,16,w1=0,w2=1)
+data_1=trainInterval(1,7,14,w1=0,w2=1)
 train_id_1=data_1['user_id']
-test_id_1=testInterval(17,24)
+test_id_1=testInterval(15,22)
 # 抽取用户标签和真实活跃用户的标签
 label_1, true_user_1 = label(train_id_1,test_id_1)
 used_feature=[i for i in range(4, data_1.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 data_set_1 = data_1.iloc[:,used_feature] #
 
-data_2=trainInterval(1,17,24,w1 = 0.3,w2 = 0.7)
+data_2=trainInterval(1,17,24,w1 = 0,w2 = 1)
 train_id_2=data_2['user_id']
-test_id_2=testInterval(25,30)
+test_id_2=testInterval(24,30)
 label_2, true_user_2 = label(train_id_2,test_id_2)
 used_feature = [i for i in range(4, data_2.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 data_set_2 = data_2.iloc[:,used_feature] # 用data2验证模型的好坏，并重新（使用data1）调参。
@@ -195,12 +180,7 @@ model = XGBClassifier(
 )
 
 # 训练集使用data1
-#model.fit(data_set_1, label_1)
-
-#训练集使用data1+data2
-final_label=label_1+label_2
-final_trainset=data_set_1.append(data_set_2)
-model.fit(data_set_1,label_1)
+model.fit(data_set_1, label_1)
 
 # 基于上面的模型，我们给出预测结果
 # predict = model.predict(data_set_2)
