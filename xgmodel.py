@@ -17,6 +17,11 @@ from sklearn.linear_model import LogisticRegression
 import warnings
 warnings.filterwarnings('ignore')
 
+def probafunc(proba_value,threshold):
+    proba_value[proba_value >= threshold] = 1
+    proba_value[proba_value < threshold] = 0
+    return proba_value
+
 # 评分准则函数
 def get_score(pre,true):
     count = 0 # count表示预测结果与真实结果的并集。
@@ -50,8 +55,7 @@ def label(train_id,test_id):
 launch = pd.read_table('app_launch_log.txt',names = ['user_id','app_launch'])#,seq = '\t')
 register = pd.read_table('user_register_log.txt',names = ['user_id','register_day','register_type','device type'])
 video = pd.read_table('video_create_log.txt',names = ['user_id','video_create'])
-activity = pd.read_table('user_activity_log.txt',names = ['user_id','day_times','page','video_id','author_id'
-    ,'action_type'])
+activity = pd.read_table('user_activity_log.txt',names = ['user_id','day_times','page','video_id','author_id','action_type'])
 
 def slice(opendate,closedate):# 特征的区间划分
 
@@ -101,21 +105,21 @@ def slice(opendate,closedate):# 特征的区间划分
     return feature
 
 # 时间分片以及对应的特征抽取
-def trainInterval(startdate, boundarydate, enddate):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
+def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
-    weight = [3,7] # 权值list
+    # weight = [3,7] # 权值list
 
     #获取第一区间特征并加权
     first_feature = slice(startdate,boundarydate)
     # print(first_feature.head())
     used_feature = [i for i in range(1, first_feature.columns.size)]
-    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * weight[0]
+    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * w1
     # print(first_feature.head())
 
     #获取第二区间特征并加权 如果有first则boubdarydate 必须+1 否则会重复计算boundarydate这一天的数据
     second_feature = slice(boundarydate,enddate)
     used_feature = [i for i in range(1, second_feature.columns.size)]
-    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * weight[1]
+    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * w2
     # print(second_feature.head())
 
     second_feature.add(first_feature)
@@ -141,15 +145,16 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-data_1=trainInterval(1,14,21)
+
+data_1=trainInterval(1,8,16,w1=0,w2=1)
 train_id_1=data_1['user_id']
-test_id_1=testInterval(22,28)
+test_id_1=testInterval(17,24)
 # 抽取用户标签和真实活跃用户的标签
 label_1, true_user_1 = label(train_id_1,test_id_1)
 used_feature=[i for i in range(4, data_1.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 data_set_1 = data_1.iloc[:,used_feature] #
 
-data_2=trainInterval(1,17,24)
+data_2=trainInterval(1,17,24,w1 = 0.3,w2 = 0.7)
 train_id_2=data_2['user_id']
 test_id_2=testInterval(25,30)
 label_2, true_user_2 = label(train_id_2,test_id_2)
@@ -158,7 +163,8 @@ data_set_2 = data_2.iloc[:,used_feature] # 用data2验证模型的好坏，并�
 
 # 切分训练、测试集，这个部分用来交叉验证。20180621版本先不用，因为我们用data1训练，用data2验证
 # X_train, X_test, Y_train, Y_test = model_selection.train_test_split(train_set, train_label, test_size=0.3, random_state=1)
-model = XGBClassifier(silent=0,  # 设置成1则没有运行信息输出，最好是设置为0.是否在运行升级时打印消息。
+model = XGBClassifier(
+        # silent=0,  # 设置成1则没有运行信息输出，最好是设置为0.是否在运行升级时打印消息。
         # nthread=4,# cpu 线程数 默认最大
         learning_rate=0.1,  # 如同学习率
         min_child_weight=1,
@@ -184,10 +190,13 @@ model = XGBClassifier(silent=0,  # 设置成1则没有运行信息输出，最�
 model.fit(data_set_1, label_1)
 
 # 基于上面的模型，我们给出预测结果
-predict = model.predict(data_set_2)
+# predict = model.predict(data_set_2)
 proba = model.predict_proba(data_set_2)[:,1]
+predict = probafunc(proba,threshold=0.42)
+
 print(predict)
 print(proba)
+
 # 输出所有结果
 result = []
 for i in range(len(predict)):
@@ -196,57 +205,24 @@ for i in range(len(predict)):
 #给出模型评分
 get_score(result,true_user_2)
 
-## 模型调参
-# def modelPara(data_train,data_label):
-#     param_xg_test = {
-#         # 'max_depth':[7,8,9,10],
-#         # 'min_child_weight':[5,6,7,8                                                 ],
-#         # 'gamma': [i / 10.0 for i in range(2, 4)],
-#         'learning_rage':[i/10 for i in range(1,3)]
-#     }
-#
-#     xgb = XGBClassifier(
-#         learning_rate=0.1,
-#         n_estimators=1000,
-#         max_depth=5,
-#         min_child_weight=1,
-#         gamma=0,
-#         subsample=0.8,
-#         colsample_bytree=0.8,
-#         objective='binary:logistic',
-#         nthread=4,
-#         scale_pos_weight=1,
-#         seed=27
-#     )
-#     param_gbdt_test = {
-#     }
-#     # estimator = GradientBoostingClassifier(min_sam)
-#
-#     # gsearch = GridSearchCV(estimator, param_grid=param_xg_test, scoring='f1', cv=5)
-#     # gsearch.fit(data_train, data_label)
-#     # print("Parameter:",gsearch.best_params_,gsearch.best_score_)
-#
-# modelPara(train_set,train_label)
+data3 = trainInterval(1,14,21,0.3,0.7)
 
-##
+# 最后一次训练模型，用上面的参数
+train_feature = data_1.append(data_2)
+train_id = train_id_1.append(train_id_2)
+test_id = np.append(test_id_1,test_id_2)
+label, true_user = label(train_id,test_id)
 
-#####
-#
-# 建模，201806013测试（最下面的函数测试的）GBDT最优秀，准确率0.8015左右，所以用gbdt提交
+train_set = train_feature.iloc[:,used_feature]
+model.fit(train_set,label)
 
-# train_feature=data_1.append(data_2)
-# train_id=train_id_1.append(train_id_2)
-# test_id=np.append(test_id_1,test_id_2)
-
-# xgb = XGBClassifier()
-# xgb.fit(train_set,train_label)
 # # 提交,这里文件的名字都称为final
-final_feature = trainInterval(1,15,30)
+final_feature = trainInterval(1,15,30,0.5,0.5)
 final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
-result = []
 predict = model.predict(final_set)
 print("最终预测了",len(predict),"条数据")
+result = []
 for i in range(len(predict)):
     if(predict[i] == 1):
         result.append(final_id.iloc[i])
