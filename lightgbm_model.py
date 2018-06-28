@@ -80,32 +80,28 @@ def slice(opendate,closedate):# 去特征的区间划分
     return feature
 
 # 时间分片以及对应的特征抽取
-def trainInterval(startdate, boundarydate, enddate):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
+def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
-    weight = [0,1] # 权值list
+    # weight = [3,7] # 权值list
 
     #获取第一区间特征并加权
     first_feature = slice(startdate,boundarydate)
     # print(first_feature.head())
     used_feature = [i for i in range(1, first_feature.columns.size)]
-    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * weight[0]
+    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * w1
     # print(first_feature.head())
 
-    #获取第二区间特征并加权
-    second_feature = slice(boundarydate,enddate)
+    #获取第二区间特征并加权 如果有first则boubdarydate 必须+1 否则会重复计算boundarydate这一天的数据
+    second_feature = slice(boundarydate+1,enddate)
     used_feature = [i for i in range(1, second_feature.columns.size)]
-    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * weight[1]
+    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * w2
+    # print(second_feature.head())
 
-    #第一区间的特征不要，只取第二区间的特征
-    #second_feature.add(first_feature)
-
+    second_feature.add(first_feature)
+    # print(second_feature.head())
     # 构造特征集合
     feature = pd.merge(temp_register,second_feature, on='user_id', how='left').fillna(0)
-    # feature.fillna(0)
-    # print(feature)
-
     # sns.heatmap(feature.corr(), annot=True, annot_kws={'size':8}, cmap="RdYlGn", xticklabels=True, yticklabels=True,linewidths=0)
-
     # ax = plt.gca()
     # for label in ax.xaxis.get_ticklabels():
     #     label.set_rotation(45)
@@ -113,7 +109,6 @@ def trainInterval(startdate, boundarydate, enddate):     # boundarydate用于划
     #     label.set_rotation(0)
     # ax.invert_yaxis()
     # plt.show()
-
     return feature
 
 def testInterval(startdate,enddate):
@@ -125,13 +120,13 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-data_1=trainInterval(1,14,21)
+data_1=trainInterval(1,7,14,w1=0.5,w2=0.5)
 train_id_1=data_1['user_id']
-test_id_1=testInterval(22,28)
+test_id_1=testInterval(15,22)
 
-data_2=trainInterval(1,17,24)
+data_2=trainInterval(8,14,21,w1 = 0.5,w2 = 0.5)
 train_id_2=data_2['user_id']
-test_id_2=testInterval(25,30)
+test_id_2=testInterval(22,29)
 
 # train_feature = trainInterval(1,1,23) #提train的特征
 # train_id = train_feature['user_id'] #提取id
@@ -182,7 +177,7 @@ true_user_2 = []
 train_label_2,true_user_2=MakeLabel(train_id_2,test_id_2)
 
 #提取出data1的特征和data2的特征，放在train_set_data1和train_set_data2中
-print('feature',data_1.info())
+#print('feature',data_1.info())
 used_feature=[i for i in range(4, data_1.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 train_set_1 = data_1.iloc[:,used_feature]
 train_set_2 = data_2.iloc[:,used_feature]
@@ -214,7 +209,7 @@ lgb_eval =lgb.Dataset(train_set_2,label=train_label_2)
 
 # # lightgbm初始参数
 param_test = {
-    'boosting_type':'gbdt',
+    'boosting_type':'rf',
     'num_leaves':200,
     'objective':'binary',
     'max_depth':5,
@@ -266,7 +261,7 @@ final_model=lgbm.fit(final_trainset,final_train_label)
 
 print('开始预测数据')
 #提交部分
-final_feature = trainInterval(1,15,30)
+final_feature = trainInterval(1,15,30,0,1)
 final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
 result = []
@@ -277,4 +272,4 @@ for i in range(len(predict)):
         result.append(final_id.iloc[i])
 print("其中，最终提交数据：",len(result),"条")
 result = pd.DataFrame(result)
-result.to_csv('lgb_result.csv',index=None)
+result.to_csv('result-lgb.csv',index=None)
