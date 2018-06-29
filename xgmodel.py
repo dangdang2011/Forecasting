@@ -42,8 +42,8 @@ def label(train_id,test_id):
     print("活跃用户有：",active,"人,不活跃用户有：",deactive,"人")
     return train_label,true_user
 
-data_1=pd.read_csv('data_1.csv')
-data_2 = pd.read_csv('data_2.csv')
+data_1 = pd.read_csv('data1.csv')
+data_2 = pd.read_csv('data2.csv')
 
 from featureSelection import testInterval
 

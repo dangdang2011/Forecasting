@@ -75,7 +75,6 @@ def slice(opendate,closedate):# 特征的区间划分
     # 改列名
     activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
                                  3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace=True)
-    # print(activity_res.head())
     activity_page.rename(columns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
                                   3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
     feature = pd.merge(launch_res, activity_res, on='user_id', how='left')

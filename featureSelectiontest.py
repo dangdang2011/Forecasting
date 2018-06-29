@@ -62,37 +62,40 @@ def slice(opendate,closedate):# 特征的区间划分
     temp_launch = launch[(launch['app_launch'] >= opendate) & (launch['app_launch'] <= closedate)]
     temp_video = video[(video['video_create'] >= opendate) & (video['video_create'] <= closedate)]
     temp_activity = activity[(activity['day_times'] >= opendate) & (activity['day_times'] <= closedate)]
+
     # 按groupby取特征：action的数量和page，launch次数，video create次数
-    activity_res = temp_activity.groupby(['user_id', 'action_type','day_times'])['video_id'].size().unstack().unstack().fillna(0).reset_index()
-    print(activity_res.info())
-    launch_res = temp_launch.groupby('user_id').count().reset_index()
-    feature = pd.merge(launch_res, activity_res, on='user_id', how='left').fillna(0)
-    print("here",feature.head())
-
+    activity_res = temp_activity.groupby(['user_id', 'action_type'])['day_times'].size().unstack().fillna(0).reset_index()
+    activity_day_res = temp_activity.groupby(['user_id', 'action_type','day_times'])['video_id'].size().unstack().unstack().fillna(0).reset_index()
     activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
+    activity_day_page = temp_activity.groupby(['user_id', 'page', 'day_times'])[
+        'video_id'].size().unstack().unstack().fillna(0).reset_index()
 
+    launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
     #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
     if 4 not in activity_res.columns:
         activity_res[4]=0.0
 
     # 改列名
-    # activity_res.rename(colzolumns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
-    #                               3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
-    feature = pd.merge(launch_res, activity_res, on='user_id', how='inner')
+    activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
+                                  3: 'action_type_3', 4: 'action_type_4',5:'action_type_5'}, inplace=True)
+    activity_page.rename(columns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
+                                  3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
 
+    feature = pd.merge(launch_res, activity_res, on='user_id', how='left').fillna(0)
+    feature = pd.merge(feature, activity_day_res, on='user_id', how='left').fillna(0)
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
 
-    # feature = af.AddFeature(feature)
+    feature = af.AddFeature(feature)
     #
-    # launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
-    # create_interval = aif.Add_create_Interval_Feature(temp_video) # 这里增加了平均创作视频间隔
-    # launch_continuous = acf.Add_continuous_launch_Feature(temp_launch) # 这里增加了连续登陆的最大天数
-    #
-    # feature = pd.merge(feature, create_interval,on='user_id',how='left').fillna(0)
-    # feature = pd.merge(feature, launch_interval, on='user_id', how='left')
-    # feature = pd.merge(feature, launch_continuous, on='user_id', how='left').fillna(0)
+    launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
+    create_interval = aif.Add_create_Interval_Feature(temp_video) # 这里增加了平均创作视频间隔
+    launch_continuous = acf.Add_continuous_launch_Feature(temp_launch) # 这里增加了连续登陆的最大天数
+
+    feature = pd.merge(feature, create_interval,on='user_id',how='left').fillna(0)
+    feature = pd.merge(feature, launch_interval, on='user_id', how='left')
+    feature = pd.merge(feature, launch_continuous, on='user_id', how='left').fillna(0)
 
     used_feature = [ i for i in range(1, feature.columns.size)] # 0 为user_id 不能作为特征。这里由于没有注册信息，所以从第一个特征开始选择。
     # print(used_feature)
@@ -107,10 +110,8 @@ def slice(opendate,closedate):# 特征的区间划分
     feature = pd.merge(feature, PCA_feature)
     return feature
 
-print(slice(1,5).head())
-
 # 时间分片以及对应的特征抽取
-def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
+def trainInterval(startdate, boundarydate, enddate,w):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
     temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
     # weight = [3,7] # 权值list
     print("注册用户有",len(temp_register))
@@ -119,13 +120,13 @@ def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用
     first_feature = slice(startdate,boundarydate)
     # print(first_feature.head())
     used_feature = [i for i in range(1, first_feature.columns.size)]
-    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * w1
+    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * w
     # print(first_feature.head())
 
     #获取第二区间特征并加权 如果有first则boubdarydate 必须+1 否则会重复计算boundarydate这一天的数据
     second_feature = slice(boundarydate+1,enddate)
     used_feature = [i for i in range(1, second_feature.columns.size)]
-    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * w2
+    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * (1-w)
     # print(second_feature.head())
 
     second_feature.add(first_feature)
@@ -143,3 +144,10 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
+data_1=trainInterval(1,8,16,w=0)
+data_2=trainInterval(1,16,23,w=0)
+
+data_1 = pd.DataFrame(data_1)
+data_2 = pd.DataFrame(data_2)
+data_1.to_csv('data1.csv')
+data_2.to_csv('data2.csv')
