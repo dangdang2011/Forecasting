@@ -8,7 +8,6 @@ def Max_action_count(x):
     return x.max()
 def Min_action_count(x):
     return x.min()
-
 #返回action 的类型，取值从0到5
 def Max_action_type(x):
     return float(x.idxmax()[-1])
@@ -35,6 +34,7 @@ def AddFeature(train_feature):
     #                              (train_feature['action_type_4']>0 )|\
     #                              (train_feature['action_type_5']>0) ])
     # 选取出action0--actoin5,统计出max_action
+
     max_action_count = pd.DataFrame(train_feature[['action_type_0', 'action_type_1', 'action_type_2',\
                                                    'action_type_3', 'action_type_4', 'action_type_5']]\
                                     ).apply(Max_action_count, axis=1)
@@ -43,7 +43,6 @@ def AddFeature(train_feature):
     train_feature = pd.concat([train_feature, max_action_count], axis=1, join='inner')
     # 将新加入的feature命名为max_action_count
     train_feature.rename(columns={0: 'max_action_count'}, inplace=True)
-
 
     # 统计出现次数最少的action
     min_action_count = pd.DataFrame(train_feature[['action_type_0', 'action_type_1', 'action_type_2',\
@@ -98,4 +97,52 @@ def AddFeature(train_feature):
     train_feature.rename(columns={0: 'kurt_action'}, inplace=True)
 
     # print train_feature.head()
+    return train_feature
+
+def Add_day_action(train_feature,opendate,close_date):
+    list=[]
+    x=2
+    list.append(x)
+    for i in range (0,close_date-opendate):
+        x=x+6
+        list.append(x)
+    for j in range (0,6):
+        max_day_action=pd.DataFrame(train_feature.iloc[:,list]).apply(Max_action_count,axis=1)
+        train_feature = pd.concat([train_feature, max_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'max_day_action_'+str(j)}, inplace=True)
+
+        min_day_action = pd.DataFrame(train_feature.iloc[:, list]).apply(Min_action_count, axis=1)
+        train_feature = pd.concat([train_feature, min_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'min_day_action_' + str(j)}, inplace=True)
+
+        mean_day_action = pd.DataFrame(train_feature.iloc[:, list]).apply(Mean_action, axis=1)
+        train_feature = pd.concat([train_feature, mean_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'mean_day_action_' + str(j)}, inplace=True)
+
+        median_day_action = pd.DataFrame(train_feature.iloc[:, list]).apply(Median_action, axis=1)
+        train_feature = pd.concat([train_feature, median_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'median_day_action_' + str(j)}, inplace=True)
+
+        sdt_day_action = pd.DataFrame(train_feature.iloc[:, list]).apply(Std_action, axis=1)
+        train_feature = pd.concat([train_feature, sdt_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'sdt_day_action_' + str(j)}, inplace=True)
+
+        skew_day_action = pd.DataFrame(train_feature.iloc[:, list]).apply(Skew_action, axis=1)
+        train_feature = pd.concat([train_feature, skew_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'skew_day_action_' + str(j)}, inplace=True)
+
+        kurt_day_action = pd.DataFrame(train_feature.iloc[:, list]).apply(Kurt_action, axis=1)
+        train_feature = pd.concat([train_feature, kurt_day_action], axis=1, join='inner')
+        train_feature.rename(columns={0: 'kurt_day_action_' + str(j)}, inplace=True)
+
+        for i in range(len(list)):
+            list[i] = list[i] + 1
+    list=[x for x in range(2,(close_date-opendate+1)*6+2)]
+    train_feature.drop(train_feature.columns[list], axis=1, inplace=True)
+    print('test')
+    print(train_feature.info())
+    #print(train_feature.iloc[0:5,[2, 8, 14, 20]])
+    #print(train_feature.iloc[0:5, [ 26, 32, 38, 44]])
+    #print(train_feature[['max_day_action_0','max_day_action_1']].head())
+
     return train_feature

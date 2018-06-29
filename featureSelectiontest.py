@@ -13,8 +13,10 @@ from xgboost import XGBClassifier
 # from lightgbm import LGBMClassifier
 from sklearn import svm
 from sklearn.linear_model import LogisticRegression
+from addFeature import  Max_action_count
 
 import warnings
+
 warnings.filterwarnings('ignore')
 
 def probafunc(proba_value,threshold):
@@ -81,14 +83,13 @@ def slice(opendate,closedate):# 特征的区间划分
                                   3: 'action_type_3', 4: 'action_type_4',5:'action_type_5'}, inplace=True)
     activity_page.rename(columns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
                                   3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
-
-    feature = pd.merge(launch_res, activity_res, on='user_id', how='left').fillna(0)
-    feature = pd.merge(feature, activity_day_res, on='user_id', how='left').fillna(0)
+    feature = pd.merge(launch_res, activity_day_res, on='user_id', how='left').fillna(0)
+    feature = pd.merge(feature, activity_res, on='user_id', how='left').fillna(0)
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
 
+    feature=af.Add_day_action(feature,opendate,closedate)
     feature = af.AddFeature(feature)
-    #
     launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
     create_interval = aif.Add_create_Interval_Feature(temp_video) # 这里增加了平均创作视频间隔
     launch_continuous = acf.Add_continuous_launch_Feature(temp_launch) # 这里增加了连续登陆的最大天数
@@ -144,10 +145,13 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-data_1=trainInterval(1,8,16,w=0)
-data_2=trainInterval(1,16,23,w=0)
-
-data_1 = pd.DataFrame(data_1)
-data_2 = pd.DataFrame(data_2)
-data_1.to_csv('data1.csv')
-data_2.to_csv('data2.csv')
+# data_1=trainInterval(1,8,16,w=0)
+# data_2=trainInterval(1,16,23,w=0)
+# #final_feature = trainInterval(1,15,30,0)
+#
+# data_1 = pd.DataFrame(data_1)
+# data_2 = pd.DataFrame(data_2)
+# #final_feature=pd.DataFrame(final_feature)
+# data_1.to_csv('data1.csv')
+# data_2.to_csv('data2.csv')
+# #final_feature.to_csv('final_feature.csv')

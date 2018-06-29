@@ -6,12 +6,17 @@ from sklearn.decomposition import PCA
 import AddIntervalFeature as aif
 import AddContinuousFeature as acf
 from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import validation_curve
 import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
 from lightgbm import LGBMClassifier
 import lightgbm as lgb
 import datetime
+import matplotlib.pyplot as plt
+from featureSelectiontest import trainInterval
+from featureSelection import testInterval
+
 warnings.filterwarnings('ignore')
 
 # 读取源数据
@@ -21,112 +26,15 @@ video = pd.read_table('video_create_log.txt',names = ['user_id','video_create'])
 activity = pd.read_table('user_activity_log.txt',names = ['user_id','day_times','page','video_id','author_id'
     ,'action_type'])
 
-def slice(opendate,closedate):# 去特征的区间划分
 
-    temp_launch = launch[(launch['app_launch'] >= opendate) & (launch['app_launch'] <= closedate)]
-    temp_video = video[(video['video_create'] >= opendate) & (video['video_create'] <= closedate)]
-    temp_activity = activity[(activity['day_times'] >= opendate) & (activity['day_times'] <= closedate)]
-    # 按groupby取特征：action的数量和page，launch次数，video create次数
-    activity_res = temp_activity.groupby(['user_id', 'action_type'])['day_times'].size().unstack().fillna(0).reset_index()
-    activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
-    launch_res = temp_launch.groupby('user_id').count().reset_index()
-    video_res = temp_video.groupby('user_id').count().reset_index()
-    #这里统计数author_id被播放、关注、点赞、转发、举报和减少推荐的数量
-    author_res = temp_activity.groupby(['author_id', 'action_type'])['day_times'].size().unstack().fillna(0).reset_index()
+data_1=pd.read_csv('data1.csv')
+data_2 = pd.read_csv('data2.csv')
 
-    #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
-    if 4 not in activity_res.columns:
-        activity_res[4]=0.0
-
-    # 这里就是给列改名了
-    author_res.rename(columns={0: 'au_action_type_0', 1: 'au_action_type_1', 2: 'au_action_type_2', \
-                               3: 'au_action_type_3', 4: 'au_action_type_4', 5: 'au_action_type_5'}, inplace=True)
-    activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
-                                 3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace=True)
-    # print(activity_res.head())
-    activity_page.rename(columns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
-                                  3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
-    feature = pd.merge(launch_res, activity_res, on='user_id', how='left')
-    feature = pd.merge(feature, activity_page, on='user_id', how='left')
-    feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
-
-    #将具有user_id==author_id的用户合并，如果author_id不在左边的表中，则忽略
-    feature = pd.merge(feature, author_res, left_on='user_id', right_on='author_id', how='left').fillna(0)
-    del feature['author_id']
-    # print(feature[feature['user_id'] == 3197][['user_id', 'app_launch']])
-    # print("Feature",feature.info())
-    feature = af.AddFeature(feature)
-
-    launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
-    create_interval=aif.Add_create_Interval_Feature(temp_video) # 这里增加了平均创作视频间隔
-    launch_continuous = acf.Add_continuous_launch_Feature(temp_launch) # 这里增加了连续登陆的最大天数
-
-    feature=pd.merge(feature,create_interval,on='user_id',how='left').fillna(0)
-    feature = pd.merge(feature, launch_interval, on='user_id', how='left')
-    feature = pd.merge(feature, launch_continuous, on='user_id', how='left').fillna(0)
-
-    used_feature = [ i for i in range(1, feature.columns.size)] # 0 为user_id 不能作为特征。这里由于没有注册信息，所以从第一个特征开始选择。
-    # print(used_feature)
-    used_set = feature.iloc[:, used_feature]
-
-    # PCA特征抽取，经检验PCA可以提高本地精度。
-    pca = PCA(n_components=4, copy=True, whiten=False)
-    used_set_pca = pca.fit_transform(used_set) # 使用PCA对标准化后的特征进行降维
-    print('单个变量方差贡献率', pca.explained_variance_ratio_)
-    PCA_feature = pd.DataFrame(used_set_pca)
-    PCA_feature['user_id'] = feature['user_id']
-    feature = pd.merge(feature, PCA_feature)
-    # print(feature)
-    return feature
-
-# 时间分片以及对应的特征抽取
-def trainInterval(startdate, boundarydate, enddate,w1,w2):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
-    temp_register = register[(register['register_day'] >= startdate) & (register['register_day'] <= enddate)]
-    # weight = [3,7] # 权值list
-
-    #获取第一区间特征并加权
-    first_feature = slice(startdate,boundarydate)
-    # print(first_feature.head())
-    used_feature = [i for i in range(1, first_feature.columns.size)]
-    first_feature.iloc[:, used_feature] = first_feature.iloc[:, used_feature] * w1
-    # print(first_feature.head())
-
-    #获取第二区间特征并加权 如果有first则boubdarydate 必须+1 否则会重复计算boundarydate这一天的数据
-    second_feature = slice(boundarydate+1,enddate)
-    used_feature = [i for i in range(1, second_feature.columns.size)]
-    second_feature.iloc[:, used_feature] = second_feature.iloc[:, used_feature] * w2
-    # print(second_feature.head())
-
-    second_feature.add(first_feature)
-    # print(second_feature.head())
-    # 构造特征集合
-    feature = pd.merge(temp_register,second_feature, on='user_id', how='left').fillna(0)
-    # sns.heatmap(feature.corr(), annot=True, annot_kws={'size':8}, cmap="RdYlGn", xticklabels=True, yticklabels=True,linewidths=0)
-    # ax = plt.gca()
-    # for label in ax.xaxis.get_ticklabels():
-    #     label.set_rotation(45)
-    # for label in ax.yaxis.get_ticklabels():
-    #     label.set_rotation(0)
-    # ax.invert_yaxis()
-    # plt.show()
-    return feature
-
-def testInterval(startdate,enddate):
-    temp_launch = launch[(launch['app_launch'] >= startdate) & (launch['app_launch'] <= enddate)]
-    temp_video = video[(video['video_create'] >= startdate) & (video['video_create'] <= enddate)]
-    temp_activity = activity[(activity['day_times'] >= startdate) & (activity['day_times'] <= enddate)]
-
-    feature = pd.concat([temp_launch, temp_video, temp_activity])
-    user_id = np.unique(feature['user_id'])#.drop_duplicates()
-    return user_id
-
-data_1=trainInterval(1,7,14,w1=0.5,w2=0.5)
 train_id_1=data_1['user_id']
-test_id_1=testInterval(15,22)
+test_id_1=testInterval(17,23)
 
-data_2=trainInterval(8,14,21,w1 = 0.5,w2 = 0.5)
 train_id_2=data_2['user_id']
-test_id_2=testInterval(22,29)
+test_id_2=testInterval(24,30)
 
 # train_feature = trainInterval(1,1,23) #提train的特征
 # train_id = train_feature['user_id'] #提取id
@@ -134,47 +42,17 @@ test_id_2=testInterval(22,29)
 
 #print("Feature",train_feature.info())
 
-# 评分准则函数
-def get_score(pre,true):
-    count = 0 # count表示预测结果与真实结果的并集。
-    print("预测数据有：",len(pre),"真实数据有：",len(true))
-    for index in range(len(pre)):
-        if(pre[index] in true):# 说明预测对了
-            # print(pre[index])
-            count += 1
-    precision = count / len(pre) # 计算公式
-    recall = count / len(true) # 计算公式
-    print("precision is:",precision,"recall is:",recall)
-    f1_score = (2 * precision * recall) / (precision + recall)
-    print("正阳例，即我们预测结果中，真正的活跃用户有：",count,"评分：",f1_score)
 
-
-# 打标签，如果1-23日注册的用户在24-30日出现过活动，则视为活跃用户
-def MakeLabel(train_id,test_id):
-    active = 0
-    deactive = 0
-    train_label = []
-    true_user = []
-    for item in train_id:
-        if item in test_id:
-            train_label.append(1)
-            true_user.append(item)
-            active += 1
-        else:
-            train_label.append(0)
-            deactive += 1
-    print("活跃用户有：", active, "人")
-    print("不活跃用户有：", deactive, "人")
-    return train_label,true_user
+from featureSelection import label,get_score
 
 #给data1和data2的数据都打上标签
 train_label_1 = []
 true_user_1 = []
-train_label_1,true_user_1=MakeLabel(train_id_1,test_id_1)
+train_label_1,true_user_1=label(train_id_1,test_id_1)
 
 train_label_2 = []
 true_user_2 = []
-train_label_2,true_user_2=MakeLabel(train_id_2,test_id_2)
+train_label_2,true_user_2=label(train_id_2,test_id_2)
 
 #提取出data1的特征和data2的特征，放在train_set_data1和train_set_data2中
 #print('feature',data_1.info())
@@ -186,6 +64,45 @@ train_set_2 = data_2.iloc[:,used_feature]
 #装载lgbd的验证数据，data2和标签
 train_data=lgb.Dataset(train_set_1,label=train_label_1)
 lgb_eval =lgb.Dataset(train_set_2,label=train_label_2)
+
+#画图
+# param_range = [2,4,6,8]
+# train_scores, test_scores = validation_curve(
+#     LGBMClassifier(),X=train_set_1,y=train_label_1,param_name='max_depth',param_range=param_range,cv = 10,scoring="accuracy",n_jobs=1
+# )
+#
+# train_mean = np.mean(train_scores, axis=1)
+# train_std = np.std(train_scores, axis=1)
+# test_mean = np.mean(test_scores, axis=1)
+# test_std = np.std(test_scores, axis=1)
+#
+# plt.plot(param_range, train_mean,
+#          color='blue', marker='o',
+#          markersize=5, label='training accuracy')
+#
+# plt.fill_between(param_range,
+#                  train_mean + train_std,
+#                  train_mean - train_std,
+#                  alpha=0.15, color='blue')
+#
+# plt.plot(param_range, test_mean,
+#          color='green', linestyle='--',
+#          marker='s', markersize=5,
+#          label='validation accuracy')
+#
+# plt.fill_between(param_range,
+#                  test_mean + test_std,
+#                  test_mean - test_std,
+#                  alpha=0.15, color='green')
+#
+# plt.grid()
+# plt.xlabel('Number of training samples')
+# plt.ylabel('Accuracy')
+# plt.legend(loc='lower right')
+# # plt.ylim([0.8, 1.0])
+# # plt.tight_layout()
+# plt.show()
+
 
 #调参
 # params={
@@ -231,7 +148,7 @@ lgbm=lgb.LGBMClassifier(
     boosting_type='gbdt',
     num_leaves=31,
     objective='binary',
-    max_depth=5,
+    max_depth=4,
     learning_rate=0.01,
     n_estimators=100,
     feature_fraction= 0.9, # 建树的特征选择比例
@@ -261,7 +178,7 @@ final_model=lgbm.fit(final_trainset,final_train_label)
 
 print('开始预测数据')
 #提交部分
-final_feature = trainInterval(1,15,30,0,1)
+final_feature = pd.read_csv('final_feature.csv')
 final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
 result = []

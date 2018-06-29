@@ -13,8 +13,10 @@ from xgboost import XGBClassifier
 # from lightgbm import LGBMClassifier
 from sklearn import svm
 from sklearn.linear_model import LogisticRegression
+from addFeature import  Max_action_count
 
 import warnings
+
 warnings.filterwarnings('ignore')
 
 def probafunc(proba_value,threshold):
@@ -62,10 +64,14 @@ def slice(opendate,closedate):# 特征的区间划分
     temp_launch = launch[(launch['app_launch'] >= opendate) & (launch['app_launch'] <= closedate)]
     temp_video = video[(video['video_create'] >= opendate) & (video['video_create'] <= closedate)]
     temp_activity = activity[(activity['day_times'] >= opendate) & (activity['day_times'] <= closedate)]
+
     # 按groupby取特征：action的数量和page，launch次数，video create次数
     activity_res = temp_activity.groupby(['user_id', 'action_type'])['day_times'].size().unstack().fillna(0).reset_index()
-    # print(activity_res.head())
+    activity_day_res = temp_activity.groupby(['user_id', 'action_type','day_times'])['video_id'].size().unstack().unstack().fillna(0).reset_index()
     activity_page = temp_activity.groupby(['user_id', 'page'])['day_times'].size().unstack().fillna(0).reset_index()
+    activity_day_page = temp_activity.groupby(['user_id', 'page', 'day_times'])[
+        'video_id'].size().unstack().unstack().fillna(0).reset_index()
+
     launch_res = temp_launch.groupby('user_id').count().reset_index()
     video_res = temp_video.groupby('user_id').count().reset_index()
     #activity在第一天没有action_type==4的行为，所以如果只取这天的话，要手动加上这列，置为0
@@ -74,15 +80,16 @@ def slice(opendate,closedate):# 特征的区间划分
 
     # 改列名
     activity_res.rename(columns={0: 'action_type_0', 1: 'action_type_1', 2: 'action_type_2', \
-                                 3: 'action_type_3', 4: 'action_type_4', 5: 'action_type_5'}, inplace=True)
+                                  3: 'action_type_3', 4: 'action_type_4',5:'action_type_5'}, inplace=True)
     activity_page.rename(columns={0: 'action_page_0', 1: 'action_page_1', 2: 'action_page_2', \
                                   3: 'action_page_3', 4: 'action_page_4'}, inplace=True)
-    feature = pd.merge(launch_res, activity_res, on='user_id', how='left')
+    feature = pd.merge(launch_res, activity_day_res, on='user_id', how='left').fillna(0)
+    feature = pd.merge(feature, activity_res, on='user_id', how='left').fillna(0)
     feature = pd.merge(feature, activity_page, on='user_id', how='left')
     feature = pd.merge(feature, video_res, on='user_id', how='left').fillna(0)# 补充没产生行为的用户，标记为0
 
+    feature=af.Add_day_action(feature,opendate,closedate)
     feature = af.AddFeature(feature)
-
     launch_interval = aif.Add_launch_Interval_Feature(temp_launch)
     create_interval = aif.Add_create_Interval_Feature(temp_video) # 这里增加了平均创作视频间隔
     launch_continuous = acf.Add_continuous_launch_Feature(temp_launch) # 这里增加了连续登陆的最大天数
@@ -103,8 +110,6 @@ def slice(opendate,closedate):# 特征的区间划分
     PCA_feature['user_id'] = feature['user_id']
     feature = pd.merge(feature, PCA_feature)
     return feature
-
-print(slice(1,5).head())
 
 # 时间分片以及对应的特征抽取
 def trainInterval(startdate, boundarydate, enddate,w):     # boundarydate用于划分时间区间,现在我们划分两个区间，以16号为分界。
@@ -140,11 +145,13 @@ def testInterval(startdate,enddate):
     user_id = np.unique(feature['user_id'])#.drop_duplicates()
     return user_id
 
-
 data_1=trainInterval(1,8,16,w=0)
 data_2=trainInterval(1,16,23,w=0)
+final_feature = trainInterval(1,15,30,0)
 
 data_1 = pd.DataFrame(data_1)
 data_2 = pd.DataFrame(data_2)
+#final_feature=pd.DataFrame(final_feature)
 data_1.to_csv('data1.csv')
 data_2.to_csv('data2.csv')
+final_feature.to_csv('final_feature.csv')

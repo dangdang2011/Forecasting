@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import validation_curve
 import warnings
+from featureSelectiontest import trainInterval
 warnings.filterwarnings('ignore')
 
 def probafunc(proba_value,threshold):
@@ -53,42 +54,43 @@ test_id_1=testInterval(17,23)
 label_1, true_user_1 = label(train_id_1,test_id_1)
 used_feature=[i for i in range(4, data_1.columns.size)] # 将used_feature 作为待选特征，赋值给train_set，作为训练集输入模型
 data_set_1 = data_1.iloc[:,used_feature] #
-param_range = [2,4,6,8]
-train_scores, test_scores = validation_curve(
-    XGBClassifier(),X=data_set_1,y=label_1,param_name='max_depth',param_range=param_range,cv = 10,scoring="accuracy",n_jobs=1
-)
 
-train_mean = np.mean(train_scores, axis=1)
-train_std = np.std(train_scores, axis=1)
-test_mean = np.mean(test_scores, axis=1)
-test_std = np.std(test_scores, axis=1)
-
-plt.plot(param_range, train_mean,
-         color='blue', marker='o',
-         markersize=5, label='training accuracy')
-
-plt.fill_between(param_range,
-                 train_mean + train_std,
-                 train_mean - train_std,
-                 alpha=0.15, color='blue')
-
-plt.plot(param_range, test_mean,
-         color='green', linestyle='--',
-         marker='s', markersize=5,
-         label='validation accuracy')
-
-plt.fill_between(param_range,
-                 test_mean + test_std,
-                 test_mean - test_std,
-                 alpha=0.15, color='green')
-
-plt.grid()
-plt.xlabel('Number of training samples')
-plt.ylabel('Accuracy')
-plt.legend(loc='lower right')
-# plt.ylim([0.8, 1.0])
-# plt.tight_layout()
-plt.show()
+# param_range = [2,4,6,8]
+# train_scores, test_scores = validation_curve(
+#     XGBClassifier(),X=data_set_1,y=label_1,param_name='max_depth',param_range=param_range,cv = 10,scoring="accuracy",n_jobs=1
+# )
+#
+# train_mean = np.mean(train_scores, axis=1)
+# train_std = np.std(train_scores, axis=1)
+# test_mean = np.mean(test_scores, axis=1)
+# test_std = np.std(test_scores, axis=1)
+#
+# plt.plot(param_range, train_mean,
+#          color='blue', marker='o',
+#          markersize=5, label='training accuracy')
+#
+# plt.fill_between(param_range,
+#                  train_mean + train_std,
+#                  train_mean - train_std,
+#                  alpha=0.15, color='blue')
+#
+# plt.plot(param_range, test_mean,
+#          color='green', linestyle='--',
+#          marker='s', markersize=5,
+#          label='validation accuracy')
+#
+# plt.fill_between(param_range,
+#                  test_mean + test_std,
+#                  test_mean - test_std,
+#                  alpha=0.15, color='green')
+#
+# plt.grid()
+# plt.xlabel('Number of training samples')
+# plt.ylabel('Accuracy')
+# plt.legend(loc='lower right')
+# # plt.ylim([0.8, 1.0])
+# # plt.tight_layout()
+# plt.show()
 # print(train_scores,test_scores)
 # print(train_scores.mean())
 # print(test_scores.mean())
@@ -210,7 +212,7 @@ train_set = train_feature.iloc[:,used_feature]
 model.fit(train_set,label)
 
 # # 提交,这里文件的名字都称为final
-final_feature = trainInterval(1,15,30,0,1)
+final_feature = pd.read_csv('final_feature.csv')
 final_id = final_feature['user_id']
 final_set = final_feature.iloc[:,used_feature]
 predict = model.predict(final_set)
