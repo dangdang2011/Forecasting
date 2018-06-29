@@ -143,8 +143,7 @@ def testInterval(startdate,enddate):
 
 
 data_1=trainInterval(1,8,16,w=0)
-
-data_2=trainInterval(1,16,23,w = 0)
+data_2=trainInterval(1,16,23,w=0)
 
 data_1 = pd.DataFrame(data_1)
 data_2 = pd.DataFrame(data_2)
